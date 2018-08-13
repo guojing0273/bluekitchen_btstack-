@@ -204,6 +204,7 @@ static void test_track_sent(le_streamer_connection_t * context, int bytes_sent){
 
 static int state = 0;
 
+#if 0
 static const hci_cmd_t hci_vendor_em_patch_query = {
     0xFC34, "2"
 };
@@ -213,6 +214,7 @@ static const hci_cmd_t hci_vendor_em_set_memory_mode = {
 static const hci_cmd_t hci_vendor_em_set_sleep_options = {
     0xFC2D, "1"
 };
+#endif
 
 /* LISTING_START(packetHandler): Packet Handler */
 static void packet_handler (uint8_t packet_type, uint16_t channel, uint8_t *packet, uint16_t size){
@@ -272,6 +274,7 @@ static void packet_handler (uint8_t packet_type, uint16_t channel, uint8_t *pack
             }
     }
 
+#if 0
     if (!hci_can_send_command_packet_now()) return;
     static int patch_index = 0;
     switch (state){
@@ -299,6 +302,7 @@ static void packet_handler (uint8_t packet_type, uint16_t channel, uint8_t *pack
         default:
             break;
     }
+#endif
 }
 
 /* LISTING_END */
