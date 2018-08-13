@@ -470,7 +470,7 @@ int btstack_main(int argc, const char * argv[]){
 #ifdef ENABLE_ADVERTISEMENTS
     // setup advertisements
     uint16_t adv_int_min = 0x0030;
-    uint16_t adv_int_max = 0x0030;
+    uint16_t adv_int_max = 0x0040;
     uint8_t adv_type = 0;
     bd_addr_t null_addr;
     memset(null_addr, 0, 6);
