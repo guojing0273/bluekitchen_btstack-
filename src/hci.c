@@ -2546,7 +2546,7 @@ void hci_init(const hci_transport_t *transport, const void *config){
     hci_stack->le_connection_interval_min = 0x0008;    // 10 ms
     hci_stack->le_connection_interval_max = 0x0018;    // 30 ms
     hci_stack->le_connection_latency      = 4;         // 4
-    hci_stack->le_supervision_timeout     = 0x0048;    // 720 ms
+    hci_stack->le_supervision_timeout     = 200;       // 1500 ms 0x0048;    // 720 ms
     hci_stack->le_minimum_ce_length       = 2;         // 1.25 ms
     hci_stack->le_maximum_ce_length       = 0x0030;    // 30 ms
 #endif
