@@ -120,7 +120,7 @@ static btstack_packet_callback_registration_t hci_event_callback_registration;
 #define TEST_MODE_DUPLEX                 3
 
 // configure test mode: send only, receive only, full duplex
-#define TEST_MODE TEST_MODE_NONE
+#define TEST_MODE TEST_MODE_DUPLEX
 
 #define REPORT_INTERVAL_MS 3000
 
@@ -404,7 +404,8 @@ static void hci_event_handler(uint8_t packet_type, uint16_t channel, uint8_t *pa
             gatt_client_discover_primary_services_by_uuid128(handle_gatt_client_event, connection_handle, le_streamer_service_uuid);
             break;
         case HCI_EVENT_DISCONNECTION_COMPLETE:
-            // unregister listener
+            // unregister listener if main handle
+            if (connection_handle != hci_event_disconnection_complete_get_connection_handle(packet)) break;
             connection_handle = HCI_CON_HANDLE_INVALID;
             if (listener_registered){
                 listener_registered = 0;
