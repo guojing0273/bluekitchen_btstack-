@@ -1129,9 +1129,9 @@ static void hci_initialization_timeout_handler(btstack_timer_source_t * ds){
             }
             break;
         case HCI_INIT_W4_CUSTOM_INIT_BCM_DELAY:
-            // otherwise continue
-            hci_stack->substate = HCI_INIT_W4_READ_LOCAL_SUPPORTED_COMMANDS;
-            hci_send_cmd(&hci_read_local_supported_commands);
+            // otherwise continue, but reset first
+            hci_stack->substate = HCI_INIT_W4_CUSTOM_INIT_BCM_RESET;
+            hci_send_cmd(&hci_reset);
             break;
         default:
             break;
@@ -1301,7 +1301,6 @@ static void hci_initializing_run(void){
 #endif
 
         case HCI_INIT_READ_LOCAL_SUPPORTED_COMMANDS:
-            log_info("Resend hci_read_local_supported_commands after CSR Warm Boot double reset");
             hci_stack->substate = HCI_INIT_W4_READ_LOCAL_SUPPORTED_COMMANDS;
             hci_send_cmd(&hci_read_local_supported_commands);
             break;       
@@ -1605,6 +1604,9 @@ static void hci_initializing_event_handler(uint8_t * packet, uint16_t size){
         case HCI_INIT_W4_SEND_RESET:
             btstack_run_loop_remove_timer(&hci_stack->timeout);
             break;
+        case HCI_INIT_W4_CUSTOM_INIT_BCM_RESET:
+            hci_stack->substate = HCI_INIT_READ_LOCAL_SUPPORTED_COMMANDS;
+            return;
         case HCI_INIT_W4_SEND_READ_LOCAL_NAME:
             log_info("Received local name, need baud change %d", need_baud_change);
             if (need_baud_change){
