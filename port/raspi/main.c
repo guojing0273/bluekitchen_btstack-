@@ -314,28 +314,31 @@ int main(int argc, const char * argv[]){
             return -1;
         case UART_SOFTWARE_NO_FLOW:
             // ??
-            printf("Software UART without flowcontrol, 460800 baud, H5, BT_REG_EN at GPIO 128l\n");
+            printf("H5, BT_REG_EN at GPIO 128\n");
             transport_config.baudrate_main = 460800;
             transport_config.flowcontrol = 0;
             btstack_control_raspi_set_bt_reg_en_pin(128);
             break;
         case UART_HARDWARE_NO_FLOW:
             // Raspberry Pi 3 B
-            printf("Hardware UART without flowcontrol, 921600 baud, H5, BT_REG_EN at GPIOO 128\n");
+            printf("H5, BT_REG_EN at GPIOO 128\n");
             transport_config.baudrate_main = 921600;
             transport_config.flowcontrol = 0;
             btstack_control_raspi_set_bt_reg_en_pin(128);
             break;
         case UART_HARDWARE_FLOW:
             // Raspberry Pi Zero W
-            // Raspberry Pi 3A+
-            // Raspberry Pi 3B+
-            printf("Hardware UART with flowcontrol, 921600 baud, H4, BT_REG_EN at GPIO 45\n");
-            transport_config.baudrate_main = 921600;
+            // Raspberry Pi 3A+ vgpio 129 but WLAN + BL
+            // Raspberry Pi 3B+ vgpio 129 but WLAN + BL
+            transport_config.baudrate_main = 3000000;
             transport_config.flowcontrol = 1;
+            printf("H4, BT_REG_EN at GPIO 45\n");
             btstack_control_raspi_set_bt_reg_en_pin(45);
             break;
     }
+
+    printf("Hardware UART %s flowcontrol, %d baud\n",
+            transport_config.flowcontrol?"with":"without", transport_config.baudrate_main );
 
     // get BCM chipset driver
     const btstack_chipset_t * chipset = btstack_chipset_bcm_instance();
