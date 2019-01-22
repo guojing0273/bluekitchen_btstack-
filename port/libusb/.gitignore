@@ -32,6 +32,7 @@ gatt_browser.h
 gatt_heart_rate_client
 hci_transport_h2_libusb_a.c
 hci_transport_h2_libusb_b.c
+headset_demo
 hfp_ag_demo
 hfp_hf_demo
 hfp_mitm
