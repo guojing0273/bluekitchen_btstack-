@@ -138,12 +138,15 @@ typedef struct {
     uint8_t gap_headset_discoverable;
     btstack_timer_source_t headset_auto_connect_timer;
 
+    // connect first to last used device, if unsuccessful go through list of Bluetooth addresses stored with link keys
+    bd_addr_t last_connected_device;
+
     // flags
     uint8_t connect;
     uint8_t disconnect;
 } headset_connection_t;
 
-static headset_connection_t headset_connection;
+static headset_connection_t headset;
 
 static void headset_run(void);
 
@@ -258,13 +261,13 @@ static char phonebook_path[30];
 static int sim1_selected;
 
 static void main_state_summary(void){
-    log_info("Main State :      Headset %s", headset_states[headset_connection.state]);
-    printf("Main State :      Headset %s\n", headset_states[headset_connection.state]);
+    log_info("Main State :      Headset %s", headset_states[headset.state]);
+    printf("Main State :      Headset %s\n", headset_states[headset.state]);
 }
 
 static void gap_summary(void){
-    log_info("GAP Discoverable: Headset %2u", (int) headset_connection.gap_headset_discoverable);
-    log_info("GAP Connectable:  Headset %2u", (int) headset_connection.gap_headset_connectable);
+    log_info("GAP Discoverable: Headset %2u", (int) headset.gap_headset_discoverable);
+    log_info("GAP Connectable:  Headset %2u", (int) headset.gap_headset_connectable);
 }
 
 #ifdef HAVE_BTSTACK_STDIN
@@ -929,70 +932,70 @@ static void headset_notify_connected_successfully(void){
 static void headset_auto_connect_timer_callback(btstack_timer_source_t * ts){
     UNUSED(ts);
     printf("headset_auto_connect_timer_callback\n");
-    if (headset_connection.state != BTSTACK_HEADSET_W4_TIMER) return;
-    headset_connection.state = BTSTACK_HEADSET_CONNECT;
-    headset_connection.connect = 1;
+    if (headset.state != BTSTACK_HEADSET_W4_TIMER) return;
+    headset.state = BTSTACK_HEADSET_CONNECT;
+    headset.connect = 1;
     headset_run();
 }
 
 static void headset_auto_connect_timer_stop(void){
-    btstack_run_loop_remove_timer(&headset_connection.headset_auto_connect_timer);
-    headset_connection.state = BTSTACK_HEADSET_IDLE;
+    btstack_run_loop_remove_timer(&headset.headset_auto_connect_timer);
+    headset.state = BTSTACK_HEADSET_IDLE;
 } 
 
 static void headset_auto_connect_restart(void){
-    headset_connection.state = BTSTACK_HEADSET_W4_TIMER;
+    headset.state = BTSTACK_HEADSET_W4_TIMER;
     log_info("Headset: reconnect in %u seconds", HEADSET_AUTO_CONNECT_INTERVAL_MS / 1000);
     printf("Headset: reconnect in %u seconds\n", HEADSET_AUTO_CONNECT_INTERVAL_MS / 1000);
     
-    btstack_run_loop_set_timer_handler(&headset_connection.headset_auto_connect_timer, headset_auto_connect_timer_callback);
-    btstack_run_loop_set_timer(&headset_connection.headset_auto_connect_timer, HEADSET_AUTO_CONNECT_INTERVAL_MS);
-    btstack_run_loop_add_timer(&headset_connection.headset_auto_connect_timer);
+    btstack_run_loop_set_timer_handler(&headset.headset_auto_connect_timer, headset_auto_connect_timer_callback);
+    btstack_run_loop_set_timer(&headset.headset_auto_connect_timer, HEADSET_AUTO_CONNECT_INTERVAL_MS);
+    btstack_run_loop_add_timer(&headset.headset_auto_connect_timer);
 }
 
 static void headset_init(void){
-    memset(&headset_connection, 0, sizeof(headset_connection_t));
-    headset_connection.con_handle = HCI_CON_HANDLE_INVALID;
+    memset(&headset, 0, sizeof(headset_connection_t));
+    headset.con_handle = HCI_CON_HANDLE_INVALID;
      // Set remote device discoverable + connectable
-    headset_connection.gap_headset_connectable  = HEADSET_CONNECTABLE_WHEN_NOT_CONNECTED;
-    headset_connection.gap_headset_discoverable = HEADSET_DISCOVERABLE_WHEN_NOT_CONNECTED;
+    headset.gap_headset_connectable  = HEADSET_CONNECTABLE_WHEN_NOT_CONNECTED;
+    headset.gap_headset_discoverable = HEADSET_DISCOVERABLE_WHEN_NOT_CONNECTED;
     main_state_summary();
     gap_summary();
 }
 
 static void headset_run(){
     if (hci_get_state() != HCI_STATE_WORKING) return;
-    switch (headset_connection.state){
+    switch (headset.state){
         case BTSTACK_HEADSET_IDLE:
         case BTSTACK_HEADSET_DISCONNECT:
         case BTSTACK_HEADSET_CONNECT:
             printf(" \n");
-            if (headset_connection.connect){
+            if (headset.connect){
                 if (!hci_can_send_command_packet_now()) break;
-                headset_connection.connect = 0;
-                headset_connection.state = BTSTACK_HEADSET_W4_CONNECTION_COMPLETE;
-                log_info("GAP Headset: auto-connect to device with %s", bd_addr_to_str(headset_connection.remote_device_addr));
+                headset.connect = 0;
+                headset.state = BTSTACK_HEADSET_W4_CONNECTION_COMPLETE;
+                log_info("GAP Headset: auto-connect to device with %s", bd_addr_to_str(headset.remote_device_addr));
                 // HCI cmd, BD_ADDR, Packet_Type, Page_Scan_Repetition_Mode, Reserved, Clock_Offset, Allow_Role_Switch
-                hci_send_cmd(&hci_create_connection, headset_connection.remote_device_addr, hci_usable_acl_packet_types(), 0, 0, 0, 1);
+                hci_send_cmd(&hci_create_connection, headset.remote_device_addr, hci_usable_acl_packet_types(), 0, 0, 0, 1);
                 break;
             }
-            if (headset_connection.con_handle == HCI_CON_HANDLE_INVALID) break;
+            if (headset.con_handle == HCI_CON_HANDLE_INVALID) break;
             log_info("GAP Headset: already connected, skip creating connection");
             
             /*  fall through */
         
         case BTSTACK_HEADSET_CONNECTED:
             if (!hci_can_send_command_packet_now()) break;
-            headset_connection.state = BTSTACK_HEADSET_W4_LINK_SUPERVSION_TIMEOUT_UPDATE;
+            headset.state = BTSTACK_HEADSET_W4_LINK_SUPERVSION_TIMEOUT_UPDATE;
             log_info("GAP Headset: set link supervision timeout");
-            hci_send_cmd(&hci_write_link_supervision_timeout, headset_connection.con_handle, LINK_SUPERVISION_TIMEOUT);
+            hci_send_cmd(&hci_write_link_supervision_timeout, headset.con_handle, LINK_SUPERVISION_TIMEOUT);
             break;
 
         case BTSTACK_HEADSET_LINK_SUPERVSION_TIMEOUT_UPDATE:
-            if (gap_security_level(headset_connection.con_handle) < LEVEL_2){
-                headset_connection.state = BTSTACK_HEADSET_W4_AUTHENTICATION;
-                log_info("GAP Headset: authenticate device %s", bd_addr_to_str(headset_connection.remote_device_addr));
-                gap_request_security_level(headset_connection.con_handle, LEVEL_2);
+            if (gap_security_level(headset.con_handle) < LEVEL_2){
+                headset.state = BTSTACK_HEADSET_W4_AUTHENTICATION;
+                log_info("GAP Headset: authenticate device %s", bd_addr_to_str(headset.remote_device_addr));
+                gap_request_security_level(headset.con_handle, LEVEL_2);
                 break;
             }
 
@@ -1001,16 +1004,16 @@ static void headset_run(){
             /*  fall through */
 
         case BTSTACK_HEADSET_AUTHENTICATION_DONE:
-            headset_connection.state = BTSTACK_HEADSET_DONE;
+            headset.state = BTSTACK_HEADSET_DONE;
             headset_notify_connected_successfully();
             break;
 
         case BTSTACK_HEADSET_DONE:
             main_state_summary();
-            if (headset_connection.disconnect){
-                headset_connection.disconnect = 0;
-                headset_connection.state = BTSTACK_HEADSET_W4_DISCONNECT;
-                gap_disconnect(headset_connection.con_handle);
+            if (headset.disconnect){
+                headset.disconnect = 0;
+                headset.state = BTSTACK_HEADSET_W4_DISCONNECT;
+                gap_disconnect(headset.con_handle);
                 break;
             }
             break;
@@ -1045,12 +1048,12 @@ static void hci_packet_handler(uint8_t packet_type, uint16_t channel, uint8_t *p
 
                 case HCI_EVENT_CONNECTION_REQUEST:
                     main_state_summary();
-                    switch (headset_connection.state){
+                    switch (headset.state){
                         case BTSTACK_HEADSET_IDLE:
                         case BTSTACK_HEADSET_W4_TIMER:
                             hci_event_connection_request_get_bd_addr(packet, event_addr);
-                            if (memcmp(event_addr, headset_connection.remote_device_addr, 6) != 0) {
-                                printf("expected %s\n", bd_addr_to_str(headset_connection.remote_device_addr));
+                            if (memcmp(event_addr, headset.remote_device_addr, 6) != 0) {
+                                printf("expected %s\n", bd_addr_to_str(headset.remote_device_addr));
                                 printf("got %s\n",      bd_addr_to_str(event_addr));
                                 break;
                             }
@@ -1070,41 +1073,41 @@ static void hci_packet_handler(uint8_t packet_type, uint16_t channel, uint8_t *p
                     switch(status){
                         case ERROR_CODE_SUCCESS:
                             // disconnect, if not from a known address
-                            if (memcmp(event_addr, headset_connection.remote_device_addr, 6) != 0){
+                            if (memcmp(event_addr, headset.remote_device_addr, 6) != 0){
                                 log_info("Headset: device with address %s is connected, but different device is expected - call disconnect", bd_addr_to_str(event_addr));
                                 gap_disconnect(con_handle);
                                 break;
                             }
-                            headset_connection.con_handle = con_handle;
-                            log_info("Headset: device connected, con handle 0x%04x", headset_connection.con_handle);
-                            headset_connection.gap_headset_connectable  = 0;
-                            gap_connectable_control(headset_connection.gap_headset_connectable);
+                            headset.con_handle = con_handle;
+                            log_info("Headset: device connected, con handle 0x%04x", headset.con_handle);
+                            headset.gap_headset_connectable  = 0;
+                            gap_connectable_control(headset.gap_headset_connectable);
 
-                            switch (headset_connection.state){
+                            switch (headset.state){
                                 case BTSTACK_HEADSET_W4_TIMER:
                                     // on incoming connection, postpone our own connection attempts (hopefully done then)
                                     headset_auto_connect_restart();
                                     break;
                                 case BTSTACK_HEADSET_W4_CONNECTION_COMPLETE:
                                     // auto-connect
-                                    headset_connection.state = BTSTACK_HEADSET_CONNECTED;
+                                    headset.state = BTSTACK_HEADSET_CONNECTED;
                                     break;
                                 default:
                                     break;
                             }
                             break;
                         case ERROR_CODE_PAGE_TIMEOUT:
-                            if (headset_connection.state != BTSTACK_HEADSET_W4_CONNECTION_COMPLETE) break;
+                            if (headset.state != BTSTACK_HEADSET_W4_CONNECTION_COMPLETE) break;
                             log_info("Headset: connection failed with page timetout, retry");
                             headset_auto_connect_restart();
                             break;
                         case ERROR_CODE_ACL_CONNECTION_ALREADY_EXISTS:
-                            if (headset_connection.state != BTSTACK_HEADSET_W4_CONNECTION_COMPLETE) break;
+                            if (headset.state != BTSTACK_HEADSET_W4_CONNECTION_COMPLETE) break;
                             log_info("Headset: connection failed with connection already exists, retry");
                             headset_auto_connect_restart();
                             break;
                         default:
-                            if (headset_connection.state != BTSTACK_HEADSET_W4_CONNECTION_COMPLETE) break;
+                            if (headset.state != BTSTACK_HEADSET_W4_CONNECTION_COMPLETE) break;
                             log_info("Headset: connection failed with status 0x%02x, retry", status);
                             headset_auto_connect_restart();
                             break;
@@ -1112,31 +1115,31 @@ static void hci_packet_handler(uint8_t packet_type, uint16_t channel, uint8_t *p
                     break;
                 case HCI_EVENT_COMMAND_COMPLETE:
                     if (!HCI_EVENT_IS_COMMAND_COMPLETE(packet, hci_write_link_supervision_timeout)) break;
-                    if (headset_connection.state != BTSTACK_HEADSET_W4_LINK_SUPERVSION_TIMEOUT_UPDATE) break;
-                    headset_connection.state = BTSTACK_HEADSET_LINK_SUPERVSION_TIMEOUT_UPDATE;
+                    if (headset.state != BTSTACK_HEADSET_W4_LINK_SUPERVSION_TIMEOUT_UPDATE) break;
+                    headset.state = BTSTACK_HEADSET_LINK_SUPERVSION_TIMEOUT_UPDATE;
                     break;
 
                 case HCI_EVENT_AUTHENTICATION_COMPLETE_EVENT:
-                    if (hci_event_authentication_complete_get_connection_handle(packet) != headset_connection.con_handle) break;
+                    if (hci_event_authentication_complete_get_connection_handle(packet) != headset.con_handle) break;
                     status = hci_event_authentication_complete_get_status(packet);
 
                     // abort auto-connection on authentication failure
                     switch (status){
                         case ERROR_CODE_SUCCESS:
-                            if (headset_connection.state != BTSTACK_HEADSET_W4_AUTHENTICATION) break;
-                            headset_connection.state = BTSTACK_HEADSET_AUTHENTICATION_DONE;
+                            if (headset.state != BTSTACK_HEADSET_W4_AUTHENTICATION) break;
+                            headset.state = BTSTACK_HEADSET_AUTHENTICATION_DONE;
                             break;
                         case ERROR_CODE_PIN_OR_KEY_MISSING:
-                            log_info("Headset: smartphone does not have link key, dropping stored link key, disconnect");
-                            gap_drop_link_key_for_bd_addr(headset_connection.remote_device_addr);
+                            log_info("Headset: device does not have link key, dropping stored link key, disconnect");
+                            gap_drop_link_key_for_bd_addr(headset.remote_device_addr);
                             // disconnect
-                            headset_connection.state = BTSTACK_HEADSET_W4_DISCONNECT;
-                            gap_disconnect(headset_connection.con_handle);
+                            headset.state = BTSTACK_HEADSET_W4_DISCONNECT;
+                            gap_disconnect(headset.con_handle);
                             break;
                         default:
-                            log_info("Headset: smartphone authentication status 0x%02x, disconnect", status);
-                            headset_connection.state = BTSTACK_HEADSET_W4_DISCONNECT;
-                            gap_disconnect(headset_connection.con_handle);
+                            log_info("Headset: device authentication status 0x%02x, disconnect", status);
+                            headset.state = BTSTACK_HEADSET_W4_DISCONNECT;
+                            gap_disconnect(headset.con_handle);
                             break;
                     }
                     main_state_summary();
@@ -1145,17 +1148,17 @@ static void hci_packet_handler(uint8_t packet_type, uint16_t channel, uint8_t *p
                 case HCI_EVENT_DISCONNECTION_COMPLETE:
                     con_handle = hci_event_disconnection_complete_get_connection_handle(packet);
                     if (con_handle == HCI_CON_HANDLE_INVALID) break;
-                    if (con_handle != headset_connection.con_handle) break;
-                    if (headset_connection.state != BTSTACK_HEADSET_W4_DISCONNECT) break;
+                    if (con_handle != headset.con_handle) break;
+                    if (headset.state != BTSTACK_HEADSET_W4_DISCONNECT) break;
 
-                    headset_connection.con_handle = HCI_CON_HANDLE_INVALID;
+                    headset.con_handle = HCI_CON_HANDLE_INVALID;
                     log_info("Headset: disconnected");
                     printf("Headset: disconnected \n");
                     
-                    headset_connection.gap_headset_connectable  = HEADSET_CONNECTABLE_WHEN_NOT_CONNECTED;
-                    gap_connectable_control(headset_connection.gap_headset_connectable);
+                    headset.gap_headset_connectable  = HEADSET_CONNECTABLE_WHEN_NOT_CONNECTED;
+                    gap_connectable_control(headset.gap_headset_connectable);
 
-                    switch (headset_connection.state){
+                    switch (headset.state){
                         case BTSTACK_HEADSET_W4_AUTHENTICATION:
                             headset_auto_connect_restart();
                             break;
@@ -1268,25 +1271,25 @@ static void stdin_process(char c){
 #endif
 
 void headset_connect(bd_addr_t remote_device_addr){
-    switch (headset_connection.state){
+    switch (headset.state){
         case BTSTACK_HEADSET_IDLE:
         case BTSTACK_HEADSET_DISCONNECT:
-            memcpy(headset_connection.remote_device_addr, remote_device_addr, BD_ADDR_LEN);
-            headset_connection.connect = 1;
+            memcpy(headset.remote_device_addr, remote_device_addr, BD_ADDR_LEN);
+            headset.connect = 1;
             break;
         case BTSTACK_HEADSET_W4_TIMER:
             headset_auto_connect_timer_stop();
-            headset_connection.connect = 1;
+            headset.connect = 1;
             break;
         default:
-            headset_connection.connect = 0;
+            headset.connect = 0;
             return;
     }
     headset_run();
 }
 
 void headset_disconnect(void){
-    switch (headset_connection.state){
+    switch (headset.state){
         case BTSTACK_HEADSET_IDLE:
         case BTSTACK_HEADSET_W4_DISCONNECT:
         case BTSTACK_HEADSET_DISCONNECT:
@@ -1295,8 +1298,8 @@ void headset_disconnect(void){
             headset_auto_connect_timer_stop();
             break;
         default:
-            if (headset_connection.con_handle == HCI_CON_HANDLE_INVALID) return;
-            headset_connection.disconnect = 1;
+            if (headset.con_handle == HCI_CON_HANDLE_INVALID) return;
+            headset.disconnect = 1;
             headset_run();
             break;
     }
