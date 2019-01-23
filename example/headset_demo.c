@@ -95,7 +95,7 @@
 #define HEADSET_CONNECTABLE_WHEN_NOT_CONNECTED  1
 #define HEADSET_DISCOVERABLE_WHEN_NOT_CONNECTED 0
 
-#define HEADSET_AUTO_CONNECT_INTERVAL_MS 5000
+#define HEADSET_AUTO_CONNECT_INTERVAL_MS 10000
 
 // value in 0.625 ms units (8000 = 5 seconds)
 #define LINK_SUPERVISION_TIMEOUT 8000
@@ -1012,6 +1012,8 @@ static void headset_auto_connect_timer_callback(btstack_timer_source_t * ts){
 static void headset_auto_connect_timer_stop(void){
     btstack_run_loop_remove_timer(&headset.headset_auto_connect_timer);
     headset.state = BTSTACK_HEADSET_IDLE;
+    headset.gap_headset_connectable  = HEADSET_CONNECTABLE_WHEN_NOT_CONNECTED;
+    gap_connectable_control(headset.gap_headset_connectable);
 } 
 
 static void headset_auto_connect_restart(void){
@@ -1019,6 +1021,8 @@ static void headset_auto_connect_restart(void){
     log_info("Headset: reconnect in %u seconds", HEADSET_AUTO_CONNECT_INTERVAL_MS / 1000);
     printf("Headset: reconnect in %u seconds\n", HEADSET_AUTO_CONNECT_INTERVAL_MS / 1000);
     
+    headset.gap_headset_connectable  = HEADSET_CONNECTABLE_WHEN_NOT_CONNECTED;
+    gap_connectable_control(headset.gap_headset_connectable);
     btstack_run_loop_set_timer_handler(&headset.headset_auto_connect_timer, headset_auto_connect_timer_callback);
     btstack_run_loop_set_timer(&headset.headset_auto_connect_timer, HEADSET_AUTO_CONNECT_INTERVAL_MS);
     btstack_run_loop_add_timer(&headset.headset_auto_connect_timer);
@@ -1098,6 +1102,34 @@ static void headset_run(){
     }
 }
 
+static int is_bd_address_known(bd_addr_t event_addr){
+    int bd_addr_known = (memcmp(event_addr, headset.last_connected_device, BD_ADDR_LEN) == 0);
+                                
+    if (bd_addr_known) return 1;
+        // search TLV for list of known devices
+    bd_addr_t  addr;
+    link_key_t link_key;
+    link_key_type_t type;
+    btstack_link_key_iterator_t it;
+
+    int ok = gap_link_key_iterator_init(&it);
+    if (!ok) {
+        return 0;
+    }
+
+    while (gap_link_key_iterator_get_next(&it, addr, link_key, &type)){
+        if (memcmp(addr, event_addr, BD_ADDR_LEN) == 0) {
+            printf("Incoming addr found in TLV\n");
+            memcpy(headset.last_connected_device, addr, BD_ADDR_LEN);
+            bd_addr_known = 1;
+            break;
+        }
+    }
+    gap_link_key_iterator_done(&it);
+    return bd_addr_known;
+}
+
+
 #ifdef HAVE_BTSTACK_STDIN
 // packet handler for interactive console
 static void hci_packet_handler(uint8_t packet_type, uint16_t channel, uint8_t *packet, uint16_t size){
@@ -1110,7 +1142,7 @@ static void hci_packet_handler(uint8_t packet_type, uint16_t channel, uint8_t *p
     int i;
     uint8_t status;
     char buffer[32];
-
+                                
     switch (packet_type){
         case HCI_EVENT_PACKET:
             switch (hci_event_packet_get_type(packet)) {
@@ -1122,7 +1154,6 @@ static void hci_packet_handler(uint8_t packet_type, uint16_t channel, uint8_t *p
                         i = btstack_tlv_impl->get_tag(btstack_tlv_context, LAST_CONNECTED_DEVICE_TAG, (uint8_t*) &headset.last_connected_device, BD_ADDR_LEN);
                         if (i == BD_ADDR_LEN){
                             printf("Found last used device %s\n", bd_addr_to_str(headset.last_connected_device));
-                            // memcpy(headset.remote_device_addr, headset.last_connected_device, BD_ADDR_LEN);
                             headset_auto_connect_restart();
                         }  
                     }
@@ -1130,17 +1161,16 @@ static void hci_packet_handler(uint8_t packet_type, uint16_t channel, uint8_t *p
 
                 case HCI_EVENT_CONNECTION_REQUEST:
                     main_state_summary();
+                    printf("HCI_EVENT_CONNECTION_REQUEST\n");
                     switch (headset.state){
                         case BTSTACK_HEADSET_IDLE:
                         case BTSTACK_HEADSET_W4_TIMER:
                             hci_event_connection_request_get_bd_addr(packet, event_addr);
-                            if (memcmp(event_addr, headset.remote_device_addr, 6) != 0) {
-                                printf("expected %s\n", bd_addr_to_str(headset.remote_device_addr));
-                                printf("got %s\n",      bd_addr_to_str(event_addr));
-                                break;
-                            }
-                            // on incoming connection, postpone our own connection attempts (hopefully done then)
-                            headset_auto_connect_restart();
+                            if (is_bd_address_known(event_addr)){
+                                // on incoming connection, postpone our own connection attempts (hopefully done then)
+                                printf("headset_auto_connect_restart\n");
+                                headset_auto_connect_restart();
+                            } 
                             break;
                         default:
                             break;
@@ -1155,8 +1185,9 @@ static void hci_packet_handler(uint8_t packet_type, uint16_t channel, uint8_t *p
                     switch(status){
                         case ERROR_CODE_SUCCESS:
                             // disconnect, if not from a known address
-                            if (memcmp(event_addr, headset.remote_device_addr, 6) != 0){
-                                log_info("Headset: device with address %s is connected, but different device is expected - call disconnect", bd_addr_to_str(event_addr));
+                            if (!is_bd_address_known(event_addr)){
+                                log_info("Headset: device with address %s is connected, but different device is expected - disconnect", bd_addr_to_str(event_addr));
+                                printf("Headset: device with address %s is connected, but different device is expected - disconnect\n", bd_addr_to_str(event_addr));
                                 gap_disconnect(con_handle);
                                 break;
                             }
