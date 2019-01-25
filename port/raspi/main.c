@@ -347,6 +347,10 @@ int main(int argc, const char * argv[]){
     // set path to firmware files
     btstack_chipset_bcm_set_hcd_folder_path("/lib/firmware/brcm");
 
+    // set device name
+//    if(transport_config.baudrate_init == 115200)
+//        btstack_chipset_bcm_set_device_name("BCM43430A1");
+
     // setup UART driver
     const btstack_uart_block_t * uart_driver = btstack_uart_block_posix_instance();
 
@@ -389,8 +393,9 @@ int main(int argc, const char * argv[]){
     control->on();
 
     // for h4, we're done
-    if (transport_config.flowcontrol){
+    if (transport_config.flowcontrol || (transport_config.baudrate_init > 115200) ){
         // setup app
+        printf("btstack_main\n");
         btstack_main(main_argc, main_argv);
     } else {
         // phase #1 download firmware

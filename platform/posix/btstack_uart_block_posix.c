@@ -329,6 +329,9 @@ static int btstack_uart_posix_set_flowcontrol(int flowcontrol){
     return 0;
 }
 
+#include <sys/ioctl.h>
+#include <linux/serial.h>
+
 static int btstack_uart_posix_open(void){
 
     const char * device_name = uart_config->device_name;
@@ -347,7 +350,12 @@ static int btstack_uart_posix_open(void){
         log_error("posix_open: Couldn't get term attributes");
         return -1;
     }
-    
+   
+    struct serial_struct serial;
+    ioctl( fd, TIOCGSERIAL, &serial );
+    serial.flags |= ASYNC_LOW_LATENCY;
+    ioctl( fd, TIOCSSERIAL, &serial );
+
     cfmakeraw(&toptions);   // make raw
 
     // 8N1
