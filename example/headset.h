@@ -58,12 +58,43 @@ void headset_connect(bd_addr_t remote_device_address);
  */
 void headset_disconnect(void);
 
+/*
+ * Shutdown all established services, and handles pairing on incoming connection. Currently, only display modus is supported. 
+ */
+void headset_start_pairing_mode(void);
+
+/*
+ * Stop pairing modus, and auto-reconnect to a nearby known device if not already connected 
+ */
+void headset_stop_pairing_mode(void);
+
+/*
+ * Accept pin code from remote device. Only works in pairing mode. 
+ */
+void headset_accept_pin_code(void);
+
+/*
+ * Reject pin code from remote device. Only works in pairing mode. 
+ */
+void headset_reject_pin_code(void);
+
+
+/*
+ * Forget remote device with given Bluetooth address. It will be excluded from auto-reconnect, 
+ * and the subsequent incoming connection from the device will be rejected if headset is not in the pairing mode.
+ *
+ * @param remote_device_address Bluetooth address of remote device, i.e {0x04,0x0C,0xCE,0xE4,0x85,0xD3}
+ */
+void headset_forget_device(bd_addr_t remote_device_address);
+
+/*
+ * Forget all known remote devices, i.e there is no remote device in the list for the auto-reconnect, 
+ * all incoming connections will be rejected unless pairing mode is ON. 
+ */
+void headset_forget_all_devices(void);
+
+
 /* TODO:
- - use list of paired devices for rejecting incoming connection 
- - use list of paired devices for iterating and trying outgoing connection
- - functions to enable passive pairing
- - function to delete the paired device
- - function to delete the all paired device
  */
 
 #endif //__HEADSET_H

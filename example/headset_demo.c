@@ -59,7 +59,7 @@
  * Alternatively, set the device_addr_string to the Bluetooth address of your 
  * remote device in the code, and call connect from the UI.
  * 
- * @test To controll the playback, tap SPACE on the console to show the available 
+ * @test To control the playback, tap SPACE on the console to show the available 
  * AVRCP commands.
  */
 // *****************************************************************************
@@ -78,7 +78,6 @@
 #include "btstack_ring_buffer.h"
 #include "btstack_tlv.h"
 
-
 #ifdef HAVE_BTSTACK_STDIN
 #include "btstack_stdin.h"
 #endif
@@ -91,9 +90,9 @@
 
 #define AVRCP_BROWSING_ENABLED 0
 
-// define visibility of remeote device interface
+// define headset visibility
 #define HEADSET_CONNECTABLE_WHEN_NOT_CONNECTED  1
-#define HEADSET_DISCOVERABLE_WHEN_NOT_CONNECTED 0
+#define HEADSET_DISCOVERABLE_WHEN_NOT_CONNECTED 1
 
 #define HEADSET_AUTO_CONNECT_INTERVAL_MS 10000
 
@@ -107,6 +106,8 @@ static const char * headset_states[] = {
     "BTSTACK_HEADSET_CONNECT",
     "BTSTACK_HEADSET_W4_CONNECTION_COMPLETE",
     "BTSTACK_HEADSET_W4_TIMER",
+    "BTSTACK_HEADSET_CONNECTED_W4_PIN_CODE_REQUEST",
+    "BTSTACK_HEADSET_CONNECTED_W4_PIN_CODE_ANSWER",
     "BTSTACK_HEADSET_CONNECTED",
     "BTSTACK_HEADSET_W4_LINK_SUPERVSION_TIMEOUT_UPDATE",
     "BTSTACK_HEADSET_LINK_SUPERVSION_TIMEOUT_UPDATE",
@@ -122,6 +123,8 @@ typedef enum {
     BTSTACK_HEADSET_CONNECT,
     BTSTACK_HEADSET_W4_CONNECTION_COMPLETE,
     BTSTACK_HEADSET_W4_TIMER,
+    BTSTACK_HEADSET_CONNECTED_W4_PIN_CODE_REQUEST,
+    BTSTACK_HEADSET_CONNECTED_W4_PIN_CODE_ANSWER,
     BTSTACK_HEADSET_CONNECTED,
     BTSTACK_HEADSET_W4_LINK_SUPERVSION_TIMEOUT_UPDATE,
     BTSTACK_HEADSET_LINK_SUPERVSION_TIMEOUT_UPDATE,
@@ -158,63 +161,12 @@ typedef struct {
     // flags
     uint8_t connect;
     uint8_t disconnect;
+    uint8_t pairing_mode_enabled;
 } headset_connection_t;
 
 static headset_connection_t headset;
 static const btstack_tlv_t * btstack_tlv_impl;
 static void                * btstack_tlv_context;
-
-
-static void btstack_headset_get_next_bd_addr(void){
-    bd_addr_t  addr;
-    link_key_t link_key;
-    link_key_type_t type;
-
-    switch (headset.reconnect_state){
-        case BTSTACK_HEADSET_RECONNECT_IDLE:
-            printf("reconnect to last used device %s\n", bd_addr_to_str(headset.last_connected_device));
-            memcpy(headset.remote_device_addr, headset.last_connected_device, BD_ADDR_LEN);
-            headset.reconnect_state = BTSTACK_HEADSET_RECONNECT_LAST_USED_DEVICE;
-            break;
-
-        case BTSTACK_HEADSET_RECONNECT_LAST_USED_DEVICE:
-            printf("last used device is unavailable %s\n", bd_addr_to_str(headset.last_connected_device));
-            headset.reconnect_state = BTSTACK_HEADSET_RECONNECT_LINK_KEY_LIST_NEXT;
-            
-            if (!gap_link_key_iterator_init(&headset.link_key_iterator)) {
-                printf("Link key iterator not implemented, use last connected device\n");
-                memcpy(headset.remote_device_addr, headset.last_connected_device, BD_ADDR_LEN);
-                headset.reconnect_state = BTSTACK_HEADSET_RECONNECT_IDLE;
-                break;
-            }
-
-            /* fall through */
-
-        case BTSTACK_HEADSET_RECONNECT_LINK_KEY_LIST_NEXT:
-            while (gap_link_key_iterator_get_next(&headset.link_key_iterator, addr, link_key, &type)){
-                if (memcmp(headset.last_connected_device, addr, BD_ADDR_LEN) == 0) continue;
-                memcpy(headset.remote_device_addr, addr, BD_ADDR_LEN);
-                printf("reconnect to %s\n", bd_addr_to_str(headset.remote_device_addr));
-                return;
-            } 
-            gap_link_key_iterator_done(&headset.link_key_iterator);
-            printf("Link key iterator done, use last connected device\n");
-            memcpy(headset.remote_device_addr, headset.last_connected_device, BD_ADDR_LEN);
-            headset.reconnect_state = BTSTACK_HEADSET_RECONNECT_IDLE;
-            break;
-    }
-}
-
-static void btstack_headset_reset_bd_addr_search(void){
-    switch (headset.reconnect_state){
-        case BTSTACK_HEADSET_RECONNECT_LINK_KEY_LIST_NEXT:
-            gap_link_key_iterator_done(&headset.link_key_iterator);
-            break;
-        default:
-            break;
-    }
-    headset.reconnect_state = BTSTACK_HEADSET_RECONNECT_IDLE; 
-}
 
 static void headset_run(void);
 
@@ -286,9 +238,9 @@ typedef struct {
 
 #ifdef HAVE_BTSTACK_STDIN
 static bd_addr_t device_addr;
-//  iPhone static const char * device_addr_string = "6C:72:E7:10:22:EE";
-//  iPad 
-static const char * device_addr_string = "80:BE:05:D5:28:48";
+//  iPhone 
+static const char * device_addr_string = "6C:72:E7:10:22:EE";
+//  iPad   static const char * device_addr_string = "80:BE:05:D5:28:48";
 
 #endif
 
@@ -1000,6 +952,57 @@ static void headset_notify_connected_successfully(void){
     printf("Device connected successfully to %s\n", bd_addr_to_str(headset.remote_device_addr));
 }
 
+static void btstack_headset_get_next_bd_addr(void){
+    bd_addr_t  addr;
+    link_key_t link_key;
+    link_key_type_t type;
+
+    switch (headset.reconnect_state){
+        case BTSTACK_HEADSET_RECONNECT_IDLE:
+            printf("reconnect to last used device %s\n", bd_addr_to_str(headset.last_connected_device));
+            memcpy(headset.remote_device_addr, headset.last_connected_device, BD_ADDR_LEN);
+            headset.reconnect_state = BTSTACK_HEADSET_RECONNECT_LAST_USED_DEVICE;
+            break;
+
+        case BTSTACK_HEADSET_RECONNECT_LAST_USED_DEVICE:
+            printf("last used device is unavailable %s\n", bd_addr_to_str(headset.last_connected_device));
+            headset.reconnect_state = BTSTACK_HEADSET_RECONNECT_LINK_KEY_LIST_NEXT;
+            
+            if (!gap_link_key_iterator_init(&headset.link_key_iterator)) {
+                printf("Link key iterator not implemented, use last connected device\n");
+                memcpy(headset.remote_device_addr, headset.last_connected_device, BD_ADDR_LEN);
+                headset.reconnect_state = BTSTACK_HEADSET_RECONNECT_IDLE;
+                break;
+            }
+
+            /* fall through */
+
+        case BTSTACK_HEADSET_RECONNECT_LINK_KEY_LIST_NEXT:
+            while (gap_link_key_iterator_get_next(&headset.link_key_iterator, addr, link_key, &type)){
+                if (memcmp(headset.last_connected_device, addr, BD_ADDR_LEN) == 0) continue;
+                memcpy(headset.remote_device_addr, addr, BD_ADDR_LEN);
+                printf("reconnect to %s\n", bd_addr_to_str(headset.remote_device_addr));
+                return;
+            } 
+            gap_link_key_iterator_done(&headset.link_key_iterator);
+            printf("Link key iterator done, use last connected device\n");
+            memcpy(headset.remote_device_addr, headset.last_connected_device, BD_ADDR_LEN);
+            headset.reconnect_state = BTSTACK_HEADSET_RECONNECT_IDLE;
+            break;
+    }
+}
+
+static void btstack_headset_reset_bd_addr_search(void){
+    switch (headset.reconnect_state){
+        case BTSTACK_HEADSET_RECONNECT_LINK_KEY_LIST_NEXT:
+            gap_link_key_iterator_done(&headset.link_key_iterator);
+            break;
+        default:
+            break;
+    }
+    headset.reconnect_state = BTSTACK_HEADSET_RECONNECT_IDLE; 
+}
+
 static void headset_auto_connect_timer_callback(btstack_timer_source_t * ts){
     UNUSED(ts);
     if (headset.state != BTSTACK_HEADSET_W4_TIMER) return;
@@ -1017,6 +1020,7 @@ static void headset_auto_connect_timer_stop(void){
 } 
 
 static void headset_auto_connect_restart(void){
+
     headset.state = BTSTACK_HEADSET_W4_TIMER;
     log_info("Headset: reconnect in %u seconds", HEADSET_AUTO_CONNECT_INTERVAL_MS / 1000);
     printf("Headset: reconnect in %u seconds\n", HEADSET_AUTO_CONNECT_INTERVAL_MS / 1000);
@@ -1033,7 +1037,7 @@ static void headset_init(void){
     headset.con_handle = HCI_CON_HANDLE_INVALID;
      // Set remote device discoverable + connectable
     headset.gap_headset_connectable  = HEADSET_CONNECTABLE_WHEN_NOT_CONNECTED;
-    headset.gap_headset_discoverable = HEADSET_DISCOVERABLE_WHEN_NOT_CONNECTED;
+    headset.gap_headset_discoverable = 0;
     main_state_summary();
     gap_summary();
 }
@@ -1041,6 +1045,10 @@ static void headset_init(void){
 static void headset_run(){
     if (hci_get_state() != HCI_STATE_WORKING) return;
     switch (headset.state){
+        case BTSTACK_HEADSET_CONNECTED_W4_PIN_CODE_ANSWER:
+            if (!headset.pairing_mode_enabled) break;
+            printf("headset_run: BTSTACK_HEADSET_CONNECTED_W4_PIN_CODE_ANSWER\n");
+            break;
         case BTSTACK_HEADSET_IDLE:
         case BTSTACK_HEADSET_DISCONNECT:
         case BTSTACK_HEADSET_CONNECT:
@@ -1166,7 +1174,7 @@ static void hci_packet_handler(uint8_t packet_type, uint16_t channel, uint8_t *p
                         case BTSTACK_HEADSET_IDLE:
                         case BTSTACK_HEADSET_W4_TIMER:
                             hci_event_connection_request_get_bd_addr(packet, event_addr);
-                            if (is_bd_address_known(event_addr)){
+                            if (is_bd_address_known(event_addr) || headset.pairing_mode_enabled){
                                 // on incoming connection, postpone our own connection attempts (hopefully done then)
                                 printf("headset_auto_connect_restart\n");
                                 headset_auto_connect_restart();
@@ -1195,6 +1203,16 @@ static void hci_packet_handler(uint8_t packet_type, uint16_t channel, uint8_t *p
                             log_info("Headset: device connected, con handle 0x%04x", headset.con_handle);
                             headset.gap_headset_connectable  = 0;
                             gap_connectable_control(headset.gap_headset_connectable);
+                            headset.gap_headset_discoverable = 0;
+                            gap_discoverable_control(headset.gap_headset_discoverable);
+
+                            if (headset.pairing_mode_enabled) {
+                                if (!headset.disconnect){
+                                    printf("wait for HCI_EVENT_PIN_CODE_REQUEST\n");
+                                    headset.state = BTSTACK_HEADSET_CONNECTED_W4_PIN_CODE_REQUEST;
+                                }
+                                break;
+                            }
 
                             switch (headset.state){
                                 case BTSTACK_HEADSET_W4_TIMER:
@@ -1271,6 +1289,12 @@ static void hci_packet_handler(uint8_t packet_type, uint16_t channel, uint8_t *p
                     headset.gap_headset_connectable  = HEADSET_CONNECTABLE_WHEN_NOT_CONNECTED;
                     gap_connectable_control(headset.gap_headset_connectable);
 
+                    if (headset.pairing_mode_enabled){
+                        headset.gap_headset_discoverable = HEADSET_DISCOVERABLE_WHEN_NOT_CONNECTED;
+                        gap_discoverable_control(headset.gap_headset_discoverable);
+                        break;    
+                    }
+
                     switch (headset.state){
                         case BTSTACK_HEADSET_W4_AUTHENTICATION:
                             headset_auto_connect_restart();
@@ -1286,9 +1310,11 @@ static void hci_packet_handler(uint8_t packet_type, uint16_t channel, uint8_t *p
                     break;
 
                 case HCI_EVENT_PIN_CODE_REQUEST:
+                    if (headset.state != BTSTACK_HEADSET_CONNECTED_W4_PIN_CODE_REQUEST) break;
+                    headset.state = BTSTACK_HEADSET_CONNECTED_W4_PIN_CODE_ANSWER;
                     printf("Pin code request - using '0000'\n");
-                    hci_event_pin_code_request_get_bd_addr(packet, device_addr);
-                    gap_pin_code_response(device_addr, "0000");
+                    hci_event_pin_code_request_get_bd_addr(packet, headset.remote_device_addr);
+                    // gap_pin_code_response(device_addr, "0000");
                     break;
 
                 case HCI_EVENT_PBAP_META:
@@ -1345,44 +1371,6 @@ static void hci_packet_handler(uint8_t packet_type, uint16_t channel, uint8_t *p
     headset_run();
 }
 
-static void show_usage(void){
-    bd_addr_t      iut_address;
-    gap_local_bd_addr(iut_address);
-    printf("\n--- Bluetooth Headset Test Console %s ---\n", bd_addr_to_str(iut_address));
-    printf("c      - Connect to remote with address addr %s\n", bd_addr_to_str(device_addr));
-    printf("C      - Disconnect from remote with address addr %s\n", bd_addr_to_str(device_addr));
-    printf("\n");
-    printf("---\n");
-}
-
-static void stdin_process(char c){
-    cmd = c;
-    uint8_t status = ERROR_CODE_SUCCESS;
-    
-    switch (cmd){
-        case 'c':
-            printf("Connect\n");
-            headset_connect(device_addr);
-            break;
-        case 'C':
-            printf("Disconnect\n");
-            headset_disconnect();
-            break;
-
-        case '\n':
-        case '\r':
-            break;
-        default:
-            show_usage();
-            return;
-    }
-
-    if (status != ERROR_CODE_SUCCESS){
-        printf("Could not perform command \'%c\', status 0x%2x\n", cmd, status);
-    }
-}
-#endif
-
 void headset_connect(bd_addr_t remote_device_addr){
     switch (headset.state){
         case BTSTACK_HEADSET_IDLE:
@@ -1418,7 +1406,160 @@ void headset_disconnect(void){
     }
 }
 
+/*
+ * Shutdown all established services, and handles pairing on incoming connection. Currently, only display modus is supported. 
+ */
+void headset_start_pairing_mode(void){
+    switch (headset.state){
+        case BTSTACK_HEADSET_W4_TIMER:
+            headset_auto_connect_timer_stop();
+            
+            /* fall through */
 
+        case BTSTACK_HEADSET_IDLE:
+            headset.gap_headset_discoverable = HEADSET_DISCOVERABLE_WHEN_NOT_CONNECTED;
+            gap_discoverable_control(headset.gap_headset_discoverable);
+            break;
+        
+        case BTSTACK_HEADSET_W4_DISCONNECT:
+        case BTSTACK_HEADSET_DISCONNECT:
+            // wait for disconnect
+            return;
+        
+        default:
+            if (headset.con_handle == HCI_CON_HANDLE_INVALID) return;
+            headset.disconnect = 1;
+            headset_run();
+            break;
+    }
+    headset.pairing_mode_enabled = 1;
+}
+
+/*
+ * Stop pairing modus, and auto-reconnect to a nearby known device if not already connected 
+ */
+void headset_stop_pairing_mode(void){
+    headset.pairing_mode_enabled = 0;
+    headset.gap_headset_discoverable = 0;
+    gap_discoverable_control(headset.gap_headset_discoverable);
+}
+
+/*
+ * Accept pin code from remote device. Only works in pairing mode. 
+ */
+void headset_accept_pin_code(void){
+    if (headset.state != BTSTACK_HEADSET_CONNECTED_W4_PIN_CODE_ANSWER){
+        printf("Headset in a wrong state, expected %d, current %d\n", BTSTACK_HEADSET_CONNECTED_W4_PIN_CODE_ANSWER, headset.state);
+        return;
+    }
+    gap_ssp_confirmation_response(headset.remote_device_addr);
+    headset.pairing_mode_enabled = 0;
+    headset.state = BTSTACK_HEADSET_CONNECTED;
+    headset_run();
+}
+
+/*
+ * Reject pin code from remote device. Only works in pairing mode. 
+ */
+void headset_reject_pin_code(void){
+    if (headset.state != BTSTACK_HEADSET_CONNECTED_W4_PIN_CODE_ANSWER){
+        printf("Headset in a wrong state, expected %d, current %d\n", BTSTACK_HEADSET_CONNECTED_W4_PIN_CODE_ANSWER, headset.state);
+        return;
+    }
+    gap_ssp_passkey_negative(headset.remote_device_addr);
+    headset.state = BTSTACK_HEADSET_CONNECTED;
+    headset_disconnect();
+}
+
+/*
+ * Forget remote device with given Bluetooth address. It will be excluded from auto-reconnect, 
+ * and the subsequent incoming connection from the device will be rejected if headset is not in the pairing mode.
+ *
+ * @param remote_device_address Bluetooth address of remote device, i.e {0x04,0x0C,0xCE,0xE4,0x85,0xD3}
+ */
+void headset_forget_device(bd_addr_t remote_device_address){
+    gap_drop_link_key_for_bd_addr(remote_device_address);
+    if (memcmp(headset.last_connected_device, remote_device_address, BD_ADDR_LEN) == 0){
+        memset(headset.last_connected_device, 0, BD_ADDR_LEN);
+    }
+}
+
+/*
+ * Forget all known remote devices, i.e there is no remote device in the list for the auto-reconnect, 
+ * all incoming connections will be rejected unless pairing mode is ON. 
+ */
+void headset_forget_all_devices(void){
+    gap_delete_all_link_keys();
+    memset(headset.last_connected_device, 0, BD_ADDR_LEN);
+}
+
+static void show_usage(void){
+    bd_addr_t      iut_address;
+    gap_local_bd_addr(iut_address);
+    printf("\n--- Bluetooth Headset Test Console %s ---\n", bd_addr_to_str(iut_address));
+    printf("c      - Connect to remote with address addr %s\n", bd_addr_to_str(device_addr));
+    printf("C      - Disconnect from remote with address addr %s\n", bd_addr_to_str(device_addr));
+    printf("d      - Forget remote device with address %s\n", bd_addr_to_str(headset.last_connected_device));
+    printf("C      - Forget all known remote devices\n");
+    printf("p      - Start pairing mode\n");
+    printf("P      - Stop pairing mode\n");
+    printf("a      - Accept pin code\n");
+    printf("A      - Reject pin code\n");
+    printf("\n");
+    printf("---\n");
+}
+
+static void stdin_process(char c){
+    cmd = c;
+    uint8_t status = ERROR_CODE_SUCCESS;
+    
+    switch (cmd){
+        case 'c':
+            printf("Connect\n");
+            headset_connect(device_addr);
+            break;
+        case 'C':
+            printf("Disconnect\n");
+            headset_disconnect();
+            break;
+        case 'd':
+            printf("Forget remote device with address %s\n", bd_addr_to_str(headset.last_connected_device));
+            headset_forget_device(headset.last_connected_device);
+            break;
+        case 'D':
+            printf("Forget all known remote devices\n");
+            headset_forget_all_devices();
+            break;
+        case 'p':
+            printf("Start pairing mode\n");
+            headset_start_pairing_mode();
+            break;
+        case 'P':
+            printf("Stop pairing mode\n");
+            headset_stop_pairing_mode();
+            break;
+        case 'a':
+            printf("Accept pin code\n");
+            headset_accept_pin_code();
+            break;
+        case 'A':
+            printf("Reject pin code\n");
+            headset_reject_pin_code();
+            break;
+
+        case '\n':
+        case '\r':
+            break;
+        default:
+            show_usage();
+            return;
+    }
+
+    if (status != ERROR_CODE_SUCCESS){
+        printf("Could not perform command \'%c\', status 0x%2x\n", cmd, status);
+    }
+}
+#endif
 int btstack_main(int argc, const char * argv[]);
 int btstack_main(int argc, const char * argv[]){
     UNUSED(argc);
@@ -1490,6 +1631,12 @@ int btstack_main(int argc, const char * argv[]){
     gap_set_local_name("Headset Demo 00:00:00:00:00:00");
     gap_discoverable_control(1);
     gap_set_class_of_device(0x200408);
+
+    // setup SM: Display only
+    // sm_init();
+    // sm_set_io_capabilities(IO_CAPABILITY_DISPLAY_ONLY);
+    // sm_set_authentication_requirements(SM_AUTHREQ_MITM_PROTECTION);
+    // sm_use_fixed_passkey_in_display_role(123456);
 
     /* Register for HCI events */
     hci_event_callback_registration.callback = &hci_packet_handler;
