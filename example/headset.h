@@ -69,15 +69,24 @@ void headset_start_pairing_mode(void);
 void headset_stop_pairing_mode(void);
 
 /*
- * Accept pin code from remote device. Only works in pairing mode. 
+ * Accept pin code from remote device (for legacy pairing). Only works in pairing mode. 
  */
-void headset_accept_pin_code(void);
+void headset_legacy_pairing_accept(void);
 
 /*
- * Reject pin code from remote device. Only works in pairing mode. 
+ * Reject pin code from remote device (for legacy pairing). Only works in pairing mode. 
  */
-void headset_reject_pin_code(void);
+void headset_legacy_pairing_reject(void);
 
+/*
+ * Accept pass-key from remote device (Simple Secure Pairing). Only works in pairing mode. 
+ */
+void headset_ssp_accept(void);
+
+/*
+ * Reject pass-key from remote device (Simple Secure Pairing). Only works in pairing mode. 
+ */
+void headset_ssp_reject(void);
 
 /*
  * Forget remote device with given Bluetooth address. It will be excluded from auto-reconnect, 
