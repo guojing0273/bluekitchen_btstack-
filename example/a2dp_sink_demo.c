@@ -397,6 +397,10 @@ static void handle_l2cap_media_data_packet(uint8_t seid, uint8_t *packet, uint16
 
     const btstack_audio_t * audio = btstack_audio_get_instance();
 
+#ifdef STORE_SBC_TO_SBC_FILE
+    fwrite(packet+pos, size-pos, 1, sbc_file);
+#endif
+
     // process data right away if there's no audio implementation active, e.g. on posix systems to store as .wav
     if (!audio){
         btstack_sbc_decoder_process_data(&state, 0, packet+pos, size-pos);
@@ -421,10 +425,6 @@ static void handle_l2cap_media_data_packet(uint8_t seid, uint8_t *packet, uint16
     // dump
     // printf("%6u %03u %d\n",  (int) btstack_run_loop_get_time_ms(), sbc_frames_in_buffer, sbc_samples_fix);
     // log_info("%03u %d", sbc_frames_in_buffer, sbc_samples_fix);
-
-#ifdef STORE_SBC_TO_SBC_FILE
-    fwrite(packet+pos, size-pos, 1, sbc_file);
-#endif
 
     // start stream if enough frames buffered
     if (!audio_stream_started && sbc_frames_in_buffer >= (OPTIMAL_FRAMES_MAX+OPTIMAL_FRAMES_MIN)/2){

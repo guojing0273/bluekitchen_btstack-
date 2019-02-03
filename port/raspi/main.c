@@ -70,6 +70,8 @@
 #include "btstack_chipset_bcm_download_firmware.h"
 #include "btstack_control_raspi.h"
 
+#include "raspi_get_model.h"
+
 int btstack_main(int argc, const char * argv[]);
 
 typedef enum  {
@@ -155,13 +157,14 @@ static void raspi_get_terminal_params( hci_transport_config_uart_t *tc )
     speed_t ospeed = cfgetospeed( &tios );
     int baud = raspi_speed_to_baud( ospeed );
     printf( "current serial terminal parameter baudrate: %d, flow control: %s\n", baud, (tios.c_cflag&CRTSCTS)?"Hardware":"None" );
-
+#if 1
     // overwrites the initial baudrate only in case it was likely to be altered before
     if( baud > 9600 )
     {
         tc->baudrate_init = baud;
         tc->flowcontrol = (tios.c_cflag & CRTSCTS)?1:0;
     }
+#endif
 }
 
 static btstack_uart_config_t uart_config;
@@ -331,6 +334,10 @@ int main(int argc, const char * argv[]){
             // Raspberry Pi 3A+ vgpio 129 but WLAN + BL
             // Raspberry Pi 3B+ vgpio 129 but WLAN + BL
             transport_config.baudrate_main = 3000000;
+            
+            if( raspi_get_model() == MODEL_ZERO_W )
+                transport_config.baudrate_main = 921600;
+
             transport_config.flowcontrol = 1;
             printf("H4, BT_REG_EN at GPIO 45\n");
             btstack_control_raspi_set_bt_reg_en_pin(45);

@@ -351,10 +351,12 @@ static int btstack_uart_posix_open(void){
         return -1;
     }
    
+#if 0
     struct serial_struct serial;
     ioctl( fd, TIOCGSERIAL, &serial );
     serial.flags |= ASYNC_LOW_LATENCY;
     ioctl( fd, TIOCSSERIAL, &serial );
+#endif
 
     cfmakeraw(&toptions);   // make raw
 
