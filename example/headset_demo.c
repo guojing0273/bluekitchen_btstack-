@@ -1492,7 +1492,8 @@ void headset_legacy_pairing_accept(void){
         return;
     }
     headset.state = BTSTACK_HEADSET_CONNECTED;
-    gap_pin_code_response(device_addr, "0000");
+    gap_pin_code_response(headset.remote_device_addr, "0000");
+    // delete device_addr
 }
 
 /*
