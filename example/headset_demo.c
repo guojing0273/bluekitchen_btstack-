@@ -105,6 +105,9 @@
 
 #define LAST_CONNECTED_DEVICE_TAG 0x41414141
 
+// #define MAIN_STATE_SUMMARY_ENABLED
+
+#ifdef MAIN_STATE_SUMMARY_ENABLED
 static const char * headset_states[] = {
     "BTSTACK_HEADSET_IDLE",
     "BTSTACK_HEADSET_W4_CONNECTION_COMPLETE",
@@ -120,6 +123,7 @@ static const char * headset_states[] = {
     "BTSTACK_HEADSET_DONE",
     "BTSTACK_HEADSET_W4_DISCONNECT",
 };
+#endif
 
 typedef enum {
     BTSTACK_HEADSET_IDLE = 0,
@@ -290,8 +294,10 @@ static char phonebook_path[30];
 static int sim1_selected;
 
 static void main_state_summary(void){
-    // log_info("Main state: %s", headset_states[headset.state]);
-    // printf(" Main state: %s\n", headset_states[headset.state]);
+#ifdef MAIN_STATE_SUMMARY_ENABLED
+    log_info("Main state: %s", headset_states[headset.state]);
+    printf(" Main state: %s\n", headset_states[headset.state]);
+#endif
 }
 
 static void log_summary(char * msg){
@@ -1034,7 +1040,6 @@ static void headset_auto_connect_timer_callback(btstack_timer_source_t * ts){
 }
 
 static void headset_auto_connect_timer_stop(void){
-    log_summary("Stop auto-connect.");
     btstack_run_loop_remove_timer(&headset.headset_auto_connect_timer);
 } 
 
@@ -1084,10 +1089,14 @@ static void headset_run(){
             if (!headset.connect) break;
             if (!hci_can_send_command_packet_now()) break;
             headset.connect = 0;
-            headset.state = BTSTACK_HEADSET_W4_CONNECTION_COMPLETE;
-            log_summary("Auto-connect to device.");
-            // HCI cmd, BD_ADDR, Packet_Type, Page_Scan_Repetition_Mode, Reserved, Clock_Offset, Allow_Role_Switch
-            hci_send_cmd(&hci_create_connection, headset.remote_device_addr, hci_usable_acl_packet_types(), 0, 0, 0, 1);
+            if (headset.remote_addr_valid){
+                headset.state = BTSTACK_HEADSET_W4_CONNECTION_COMPLETE;
+                log_summary("Auto-connect to device.");
+                // HCI cmd, BD_ADDR, Packet_Type, Page_Scan_Repetition_Mode, Reserved, Clock_Offset, Allow_Role_Switch
+                hci_send_cmd(&hci_create_connection, headset.remote_device_addr, hci_usable_acl_packet_types(), 0, 0, 0, 1);
+            } else {
+                log_summary("Invalid remote address.");
+            }
             break;
 
         case BTSTACK_HEADSET_CONNECTED:
@@ -1138,7 +1147,9 @@ static void headset_run(){
             }
 
             if (headset.pairing_mode_enabled){
-
+                log_summary("Pairing mode is on.");
+                headset.gap_headset_discoverable = HEADSET_DISCOVERABLE_WHEN_NOT_CONNECTED;
+                gap_discoverable_control(headset.gap_headset_discoverable);
                 break;
             }
             break;
@@ -1235,12 +1246,16 @@ static void hci_packet_handler(uint8_t packet_type, uint16_t channel, uint8_t *p
                     switch(status){
                         case ERROR_CODE_SUCCESS:
                             // disconnect, if not from a known address
-                            if (!is_bd_address_known(event_addr) && !headset.pairing_mode_enabled){
-                                log_summary("Unknown device is connected, but pairing mode is disabled - disconnect.");
-                                headset.state = BTSTACK_HEADSET_W4_DISCONNECT;
-                                gap_disconnect(con_handle);
-                                break;
+                            if (!is_bd_address_known(event_addr)){
+                                if (!headset.pairing_mode_enabled) {
+                                    log_summary("Unknown device is connected, and pairing mode is disabled - disconnect.");
+                                    headset.state = BTSTACK_HEADSET_W4_DISCONNECT;
+                                    gap_disconnect(con_handle);
+                                    break;
+                                }
+                                log_summary("Unknown device is connected, but pairing mode is enabled. Allow connect.");
                             }
+
                             headset.con_handle = con_handle;
                             log_summary("Device connected.");
                             main_state_summary();
@@ -1465,7 +1480,7 @@ void headset_start_pairing_mode(void){
             gap_connectable_control(headset.gap_headset_connectable);
             headset.gap_headset_discoverable = HEADSET_DISCOVERABLE_WHEN_NOT_CONNECTED;
             gap_discoverable_control(headset.gap_headset_discoverable);
-            break;
+            return;
         
         case BTSTACK_HEADSET_W4_DISCONNECT:
             // wait for disconnect
