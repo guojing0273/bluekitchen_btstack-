@@ -1007,7 +1007,7 @@ static void btstack_headset_outgoing_device_iterator_get_next(void){
             } 
             gap_link_key_iterator_done(&headset.link_key_iterator);
             headset.reconnect_state = BTSTACK_HEADSET_RECONNECT_NOT_INITIALIZED;
-            log_summary("There is no information on previously bounded device. Turn on pairing mode to enable incoming connection.");
+            log_summary("There is no information on previously bonded device. Turn on pairing mode to enable incoming connection.");
             break;
         default:
             break;
@@ -1209,12 +1209,18 @@ static void hci_packet_handler(uint8_t packet_type, uint16_t channel, uint8_t *p
                     switch (headset.state){
                         case BTSTACK_HEADSET_IDLE:
                         case BTSTACK_HEADSET_W4_TIMER:
-                            if (is_bd_address_known(event_addr) || headset.pairing_mode_enabled){
+                            if (is_bd_address_known(event_addr)){
                                 // on incoming connection, postpone our own connection attempts (hopefully done then)
                                 memcpy(headset.remote_device_addr, event_addr, BD_ADDR_LEN);
                                 headset.remote_addr_valid = 1;
-                                log_summary("Device has been previously bounded, allow incoming connection.");
-                            } 
+                                log_summary("Device has been previously bonded, allow incoming connection.");
+                            } else if (headset.pairing_mode_enabled){
+                                // on incoming connection, postpone our own connection attempts (hopefully done then)
+                                memcpy(headset.remote_device_addr, event_addr, BD_ADDR_LEN);
+                                headset.remote_addr_valid = 1;
+                                log_summary("Unknown address, but pairing mode is on, allow incoming connection.");
+                            }                           
+
                             break;
                         default:
                             break;
@@ -1493,7 +1499,7 @@ void headset_legacy_pairing_accept(void){
     }
     headset.state = BTSTACK_HEADSET_CONNECTED;
     gap_pin_code_response(headset.remote_device_addr, "0000");
-    // delete device_addr
+    // delete device
 }
 
 /*
