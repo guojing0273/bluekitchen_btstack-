@@ -88,9 +88,11 @@
 #define STORE_SBC_TO_WAV_FILE 
 #endif
 
-#define GAP_TEST_LEGACY_PAIRING
-#define ENABLE_A2DP
+// #define MAIN_STATE_SUMMARY_ENABLED
+// #define GAP_TEST_LEGACY_PAIRING
 #define ENABLE_HFP
+#define ENABLE_A2DP
+#define ENABLE_AVRCP
 
 #define AVRCP_BROWSING_ENABLED 0
 
@@ -105,7 +107,6 @@
 
 #define LAST_CONNECTED_DEVICE_TAG 0x41414141
 
-// #define MAIN_STATE_SUMMARY_ENABLED
 
 #ifdef MAIN_STATE_SUMMARY_ENABLED
 static const char * headset_states[] = {
@@ -120,6 +121,24 @@ static const char * headset_states[] = {
     "BTSTACK_HEADSET_LINK_SUPERVSION_TIMEOUT_UPDATE",
     "BTSTACK_HEADSET_W4_AUTHENTICATION",
     "BTSTACK_HEADSET_AUTHENTICATION_DONE",
+
+    "BTSTACK_HEADSET_W4_HFP",
+    "BTSTACK_HEADSET_HFP_DONE",
+    "BTSTACK_HEADSET_W4_A2DP",
+    "BTSTACK_HEADSET_A2DP_DONE",
+    "BTSTACK_HEADSET_W4_AVRCP",
+    "BTSTACK_HEADSET_AVRCP_DONE",
+    "BTSTACK_HEADSET_W4_HID",
+    "BTSTACK_HEADSET_HID_DONE",
+    "BTSTACK_HEADSET_W4_PABP_CHECK",
+    "BTSTACK_HEADSET_PBAP_CHECK_DONE",
+    "BTSTACK_HEADSET_W4_PABP_CRC",
+    "BTSTACK_HEADSET_PBAP_CRC_DONE",
+    "BTSTACK_HEADSET_W4_PHONEBOOK_ERASE",
+    "BTSTACK_HEADSET_PHONEBOOK_ERASE_DONE",
+    "BTSTACK_HEADSET_W4_PBAP_UPDATE",
+    "BTSTACK_HEADSET_PBAP_UPDATE_DONE",
+
     "BTSTACK_HEADSET_DONE",
     "BTSTACK_HEADSET_W4_DISCONNECT",
 };
@@ -137,8 +156,27 @@ typedef enum {
     BTSTACK_HEADSET_LINK_SUPERVSION_TIMEOUT_UPDATE,
     BTSTACK_HEADSET_W4_AUTHENTICATION,
     BTSTACK_HEADSET_AUTHENTICATION_DONE,
+    
+    BTSTACK_HEADSET_W4_HFP,
+    BTSTACK_HEADSET_HFP_DONE,
+
+    BTSTACK_HEADSET_W4_A2DP,
+    BTSTACK_HEADSET_A2DP_DONE,
+    BTSTACK_HEADSET_W4_AVRCP,
+    BTSTACK_HEADSET_AVRCP_DONE,
+    BTSTACK_HEADSET_W4_HID,
+    BTSTACK_HEADSET_HID_DONE,
+    BTSTACK_HEADSET_W4_PABP_CHECK,
+    BTSTACK_HEADSET_PBAP_CHECK_DONE,
+    BTSTACK_HEADSET_W4_PABP_CRC,
+    BTSTACK_HEADSET_PBAP_CRC_DONE,
+    BTSTACK_HEADSET_W4_PHONEBOOK_ERASE,
+    BTSTACK_HEADSET_PHONEBOOK_ERASE_DONE,
+    BTSTACK_HEADSET_W4_PBAP_UPDATE,
+    BTSTACK_HEADSET_PBAP_UPDATE_DONE,
+
     BTSTACK_HEADSET_DONE,
-    BTSTACK_HEADSET_W4_DISCONNECT,
+    BTSTACK_HEADSET_W4_DISCONNECT
 } btstack_headset_state_t;
 
 typedef enum {
@@ -247,17 +285,17 @@ typedef struct {
 } avdtp_media_codec_configuration_sbc_t;
 
 #ifdef HAVE_BTSTACK_STDIN
-static bd_addr_t device_addr;
+// static bd_addr_t device_addr;
 //  iPhone 
-static const char * device_addr_string = "6C:72:E7:10:22:EE";
+// static const char * device_addr_string = "6C:72:E7:10:22:EE";
 //  iPad   static const char * device_addr_string = "80:BE:05:D5:28:48";
 
 #endif
 
 static uint8_t  sdp_avdtp_sink_service_buffer[150];
 static avdtp_media_codec_configuration_sbc_t sbc_configuration;
-static uint16_t a2dp_cid = 0;
-static uint8_t  local_seid = 0;
+static uint16_t a2dp_sink_cid = 0;
+static uint8_t  a2dp_sink_local_seid = 0;
 static uint8_t  value[100];
 
 static btstack_packet_callback_registration_t hci_event_callback_registration;
@@ -265,7 +303,7 @@ static btstack_packet_callback_registration_t hci_event_callback_registration;
 static int media_initialized = 0;
 
 static uint16_t a2dp_sink_connected = 0;
-static uint16_t avrcp_cid = 0;
+static uint16_t avrcp_controller_cid = 0;
 static uint8_t  avrcp_connected = 0;
 static uint8_t  sdp_avrcp_controller_service_buffer[200];
 
@@ -273,7 +311,7 @@ static uint8_t hfp_service_buffer[150];
 static const uint8_t   rfcomm_channel_nr = 1;
 static const char hfp_hf_service_name[] = "HFP HF Demo";
 
-static hci_con_handle_t acl_handle = HCI_CON_HANDLE_INVALID;
+static hci_con_handle_t hfp_hf_acl_handle = HCI_CON_HANDLE_INVALID;
 static hci_con_handle_t sco_handle = HCI_CON_HANDLE_INVALID;
 #ifdef ENABLE_HFP_WIDE_BAND_SPEECH
 static uint8_t codecs[] = {HFP_CODEC_CVSD, HFP_CODEC_MSBC};
@@ -622,33 +660,36 @@ static void avrcp_controller_packet_handler(uint8_t packet_type, uint16_t channe
     switch (hci_event_a2dp_meta_get_subevent_code(packet)){
         case AVRCP_SUBEVENT_CONNECTION_ESTABLISHED: {
             local_cid = avrcp_subevent_connection_established_get_avrcp_cid(packet);
-            if (avrcp_cid != 0 && avrcp_cid != local_cid) {
-                printf("Headsed AVRCP: Connection failed, expected 0x%02X l2cap cid, received 0x%02X\n", avrcp_cid, local_cid);
+            if (avrcp_controller_cid != 0 && avrcp_controller_cid != local_cid) {
+                printf("Headsed AVRCP: Connection failed, expected 0x%02X l2cap cid, received 0x%02X\n", avrcp_controller_cid, local_cid);
                 return;
             }
 
             status = avrcp_subevent_connection_established_get_status(packet);
             if (status != ERROR_CODE_SUCCESS){
                 printf("Headsed AVRCP: Connection failed: status 0x%02x\n", status);
-                avrcp_cid = 0;
+                avrcp_controller_cid = 0;
                 return;
             }
             
-            avrcp_cid = local_cid;
+            avrcp_controller_cid = local_cid;
             avrcp_connected = 1;
             avrcp_subevent_connection_established_get_bd_addr(packet, adress);
-            printf("Headsed AVRCP: Channel successfully opened: %s, avrcp_cid 0x%02x\n", bd_addr_to_str(adress), avrcp_cid);
+            printf("Headsed AVRCP: Channel successfully opened: %s, avrcp_cid 0x%02x\n", bd_addr_to_str(adress), avrcp_controller_cid);
 
             // automatically enable notifications
-            avrcp_controller_enable_notification(avrcp_cid, AVRCP_NOTIFICATION_EVENT_PLAYBACK_STATUS_CHANGED);
-            avrcp_controller_enable_notification(avrcp_cid, AVRCP_NOTIFICATION_EVENT_NOW_PLAYING_CONTENT_CHANGED);
-            avrcp_controller_enable_notification(avrcp_cid, AVRCP_NOTIFICATION_EVENT_VOLUME_CHANGED);
-            avrcp_controller_enable_notification(avrcp_cid, AVRCP_NOTIFICATION_EVENT_TRACK_CHANGED);
+            avrcp_controller_enable_notification(avrcp_controller_cid, AVRCP_NOTIFICATION_EVENT_PLAYBACK_STATUS_CHANGED);
+            avrcp_controller_enable_notification(avrcp_controller_cid, AVRCP_NOTIFICATION_EVENT_NOW_PLAYING_CONTENT_CHANGED);
+            avrcp_controller_enable_notification(avrcp_controller_cid, AVRCP_NOTIFICATION_EVENT_VOLUME_CHANGED);
+            avrcp_controller_enable_notification(avrcp_controller_cid, AVRCP_NOTIFICATION_EVENT_TRACK_CHANGED);
+            if (headset.state != BTSTACK_HEADSET_W4_AVRCP) break;
+            headset.state = BTSTACK_HEADSET_AVRCP_DONE;
+
             return;
         }
         case AVRCP_SUBEVENT_CONNECTION_RELEASED:
             printf("Headsed AVRCP: Channel released: avrcp_cid 0x%02x\n", avrcp_subevent_connection_released_get_avrcp_cid(packet));
-            avrcp_cid = 0;
+            avrcp_controller_cid = 0;
             avrcp_connected = 0;
             return;
         default:
@@ -656,7 +697,7 @@ static void avrcp_controller_packet_handler(uint8_t packet_type, uint16_t channe
     }
 
     status = packet[5];
-    if (!avrcp_cid) return;
+    if (!avrcp_controller_cid) return;
 
     // ignore INTERIM status
     if (status == AVRCP_CTYPE_RESPONSE_INTERIM){
@@ -751,8 +792,21 @@ static void avrcp_controller_packet_handler(uint8_t packet_type, uint16_t channe
     }  
 }
 
+static int headset_hfp_hf_slc_active(void){
+    return hfp_hf_acl_handle != HCI_CON_HANDLE_INVALID;
+}
+static int headset_a2dp_sink_connected(void){
+    log_info("a2dp_sink_cid 0x%02x", a2dp_sink_cid);
+    return a2dp_sink_cid != 0;
+}
+
+static int headset_avrcp_controller_connected(void){
+    return avrcp_controller_cid != 0;
+}
+
 static void hfp_hf_packet_handler(uint8_t packet_type, uint16_t channel, uint8_t * packet, uint16_t packet_size){
     UNUSED(channel);
+    bd_addr_t device_addr;
 
     switch (packet_type){
         case HCI_SCO_DATA_PACKET:
@@ -775,12 +829,19 @@ static void hfp_hf_packet_handler(uint8_t packet_type, uint16_t channel, uint8_t
                 case HCI_EVENT_HFP_META:
                     switch (hci_event_a2dp_meta_get_subevent_code(packet)) {   
                         case HFP_SUBEVENT_SERVICE_LEVEL_CONNECTION_ESTABLISHED:
-                            acl_handle = hfp_subevent_service_level_connection_established_get_con_handle(packet);
                             hfp_subevent_service_level_connection_established_get_bd_addr(packet, device_addr);
-                            printf("Headset HFP: Service level connection established %s.\n\n", bd_addr_to_str(device_addr));
+                            if (memcmp(device_addr,headset.remote_device_addr, BD_ADDR_LEN) != 0) {
+                                log_summary("HFP HF, unexpected remote address, disconnect SLC.");
+                                hfp_hf_release_service_level_connection(hfp_subevent_service_level_connection_established_get_con_handle(packet));
+                                break;
+                            }
+                            if (headset.state != BTSTACK_HEADSET_W4_HFP) break;
+                            headset.state = BTSTACK_HEADSET_HFP_DONE;
+                            hfp_hf_acl_handle = hfp_subevent_service_level_connection_established_get_con_handle(packet);
+                            log_summary("HFP HF, Service level connection established");
                             break;
                         case HFP_SUBEVENT_SERVICE_LEVEL_CONNECTION_RELEASED:
-                            acl_handle = HCI_CON_HANDLE_INVALID;
+                            hfp_hf_acl_handle = HCI_CON_HANDLE_INVALID;
                             printf("Headset HFP:Service level connection released.\n\n");
                             break;
                         case HFP_SUBEVENT_AUDIO_CONNECTION_ESTABLISHED:
@@ -884,10 +945,16 @@ static void a2dp_sink_packet_handler(uint8_t packet_type, uint16_t channel, uint
     bd_addr_t address;
     uint8_t status;
 
+    bd_addr_t device_addr;
     if (packet_type != HCI_EVENT_PACKET) return;
     if (hci_event_packet_get_type(packet) != HCI_EVENT_A2DP_META) return;
 
     switch (hci_event_a2dp_meta_get_subevent_code(packet)){
+        case A2DP_SUBEVENT_SIGNALING_CONNECTION_ESTABLISHED:
+            if (headset.state != BTSTACK_HEADSET_W4_A2DP) break;
+            headset.state = BTSTACK_HEADSET_A2DP_DONE;
+            break;
+
         case A2DP_SUBEVENT_SIGNALING_MEDIA_CODEC_OTHER_CONFIGURATION:
             printf("Headset A2DP: received non SBC codec. not implemented.\n");
             break;
@@ -916,11 +983,11 @@ static void a2dp_sink_packet_handler(uint8_t packet_type, uint16_t channel, uint
             a2dp_subevent_stream_established_get_bd_addr(packet, address);
             status = a2dp_subevent_stream_established_get_status(packet);
             cid = a2dp_subevent_stream_established_get_a2dp_cid(packet);
-            printf("A2DP_SUBEVENT_STREAM_ESTABLISHED %d, %d \n", cid, a2dp_cid);
-            if (!a2dp_cid){
+            printf("A2DP_SUBEVENT_STREAM_ESTABLISHED %d, %d \n", cid, a2dp_sink_cid);
+            if (!a2dp_sink_cid){
                 // incoming connection
-                a2dp_cid = cid;
-            } else if (cid != a2dp_cid) {
+                a2dp_sink_cid = cid;
+            } else if (cid != a2dp_sink_cid) {
                 break;
             }
             if (status){
@@ -928,34 +995,34 @@ static void a2dp_sink_packet_handler(uint8_t packet_type, uint16_t channel, uint
                 printf("Headset A2DP: streaming connection failed, status 0x%02x\n", status);
                 break;
             }
-            printf("Headset A2DP: streaming connection is established, address %s, a2dp cid 0x%02X, local_seid %d\n", bd_addr_to_str(address), a2dp_cid, local_seid);
+            printf("Headset A2DP: streaming connection is established, address %s, a2dp cid 0x%02X, local_seid %d\n", bd_addr_to_str(address), a2dp_sink_cid, a2dp_sink_local_seid);
             
             memcpy(device_addr, address, 6);
 
-            local_seid = a2dp_subevent_stream_established_get_local_seid(packet);
+            a2dp_sink_local_seid = a2dp_subevent_stream_established_get_local_seid(packet);
             a2dp_sink_connected = 1;
             break;
         
         case A2DP_SUBEVENT_STREAM_STARTED:
             cid = a2dp_subevent_stream_started_get_a2dp_cid(packet);
-            if (cid != a2dp_cid) break;
-            local_seid = a2dp_subevent_stream_started_get_local_seid(packet);
-            printf("Headset A2DP: stream started, a2dp cid 0x%02X, local_seid %d\n", a2dp_cid, local_seid);
+            if (cid != a2dp_sink_cid) break;
+            a2dp_sink_local_seid = a2dp_subevent_stream_started_get_local_seid(packet);
+            printf("Headset A2DP: stream started, a2dp cid 0x%02X, local_seid %d\n", a2dp_sink_cid, a2dp_sink_local_seid);
             // started
             media_processing_init(sbc_configuration);
             break;
         
         case A2DP_SUBEVENT_STREAM_SUSPENDED:
             cid = a2dp_subevent_stream_suspended_get_a2dp_cid(packet);
-            if (cid != a2dp_cid) break;
-            local_seid = a2dp_subevent_stream_suspended_get_local_seid(packet);
-            printf("Headset A2DP: stream paused, a2dp cid 0x%02X, local_seid %d\n", a2dp_cid, local_seid);
+            if (cid != a2dp_sink_cid) break;
+            a2dp_sink_local_seid = a2dp_subevent_stream_suspended_get_local_seid(packet);
+            printf("Headset A2DP: stream paused, a2dp cid 0x%02X, local_seid %d\n", a2dp_sink_cid, a2dp_sink_local_seid);
             media_processing_close();
             break;
         
         case A2DP_SUBEVENT_STREAM_RELEASED:
-            local_seid = a2dp_subevent_stream_released_get_local_seid(packet);
-            printf("Headset A2DP: stream released, a2dp cid 0x%02X, local_seid %d\n", a2dp_cid, local_seid);
+            a2dp_sink_local_seid = a2dp_subevent_stream_released_get_local_seid(packet);
+            printf("Headset A2DP: stream released, a2dp cid 0x%02X, local_seid %d\n", a2dp_sink_cid, a2dp_sink_local_seid);
             media_processing_close();
             break;
         case A2DP_SUBEVENT_SIGNALING_CONNECTION_RELEASED:
@@ -1078,6 +1145,8 @@ static void headset_init(void){
 }
 
 static void headset_run(){
+    uint8_t status = ERROR_CODE_SUCCESS;
+
     if (hci_get_state() != HCI_STATE_WORKING) return;
     switch (headset.state){
         case BTSTACK_HEADSET_INCOMING_W4_AUTHENTICATION_ANSWER:
@@ -1118,9 +1187,72 @@ static void headset_run(){
             /*  fall through */
 
         case BTSTACK_HEADSET_AUTHENTICATION_DONE:
-            headset_notify_connected_successfully();
 
-            // main_state_summary();
+#ifdef ENABLE_HFP
+            // skip if already connected
+            if (!headset_hfp_hf_slc_active()){
+                // assert SDP client is ready
+                if (!sdp_client_ready()) break;
+                log_summary("HFP HF, Establish Service level connection");
+                headset.state = BTSTACK_HEADSET_W4_HFP;
+                main_state_summary();
+                hfp_hf_establish_service_level_connection(headset.remote_device_addr);
+                break;
+            } 
+
+            log_info("HFP HF: already connected, skip creating smartphone connection");
+
+            /*  fall through */
+
+
+        case BTSTACK_HEADSET_HFP_DONE:
+#endif
+#ifdef ENABLE_A2DP
+            // skip if already connected
+            if (!headset_a2dp_sink_connected()){
+                // assert SDP client is ready
+                if (!sdp_client_ready()) break;
+
+                log_summary("A2DP Sink, Creating AVDTP connection to remote audio source (smartphone)");
+                headset.state = BTSTACK_HEADSET_W4_A2DP;
+                main_state_summary();
+                a2dp_sink_establish_stream(headset.remote_device_addr, a2dp_sink_local_seid, &a2dp_sink_cid);
+                break;
+            }
+            
+            log_info("A2DP Sink: already connected, skip creating AVDTP connection");
+
+            /* fall through */
+
+        case BTSTACK_HEADSET_A2DP_DONE:
+#endif
+#ifdef ENABLE_AVRCP
+            // skip if already  connected
+            if (!headset_avrcp_controller_connected()){
+                // assert SDP client is ready
+                if (!sdp_client_ready()) break;
+
+                log_info("AVRCP Controller: Creating AVRCP connection to remote target (smartphone)");
+                headset.state = BTSTACK_HEADSET_W4_AVRCP;
+                main_state_summary();
+                status = avrcp_controller_connect(headset.remote_device_addr, &avrcp_controller_cid);
+                if (status != ERROR_CODE_SUCCESS){
+                    log_info("AVCRCP Controller: Could not perform command, status 0x%2x\n", status);
+                }
+                break;
+            }
+
+            log_info("AVRCP Controller: already connected, skip creating smartphone connection");
+
+            /* fall through */
+
+        case BTSTACK_HEADSET_AVRCP_DONE:
+#endif
+
+            headset.state = BTSTACK_HEADSET_DONE;
+            main_state_summary();
+            headset_notify_connected_successfully();
+          
             btstack_headset_outgoing_device_iterator_complete();
             memcpy(headset.last_connected_device, headset.remote_device_addr, BD_ADDR_LEN);
             headset.last_connected_device_valid = 1;
@@ -1137,7 +1269,6 @@ static void headset_run(){
              /*  fall through */
 
         case BTSTACK_HEADSET_DONE:
-            headset.state = BTSTACK_HEADSET_DONE;
             
             if (headset.disconnect){
                 headset.disconnect = 0;
@@ -1253,7 +1384,7 @@ static void hci_packet_handler(uint8_t packet_type, uint16_t channel, uint8_t *p
                                     gap_disconnect(con_handle);
                                     break;
                                 }
-                                log_summary("Unknown device is connected, but pairing mode is enabled. Allow connect.");
+                                log_summary("Unknown device is connected and pairing mode is enabled. Allow connect.");
                             }
 
                             headset.con_handle = con_handle;
@@ -1334,6 +1465,7 @@ static void hci_packet_handler(uint8_t packet_type, uint16_t channel, uint8_t *p
                         case ERROR_CODE_SUCCESS:
                             if (headset.state != BTSTACK_HEADSET_W4_AUTHENTICATION) break;
                             headset.state = BTSTACK_HEADSET_AUTHENTICATION_DONE;
+                            log_summary("Device authenticated, auto-start services.");
                             break;
                         case ERROR_CODE_PIN_OR_KEY_MISSING:
                             log_summary("Device does not have link key, dropping stored link key, disconnect.");
@@ -1467,7 +1599,7 @@ void headset_disconnect(void){
  * Shutdown all established services, and handles pairing on incoming connection. Currently, only display modus is supported. 
  */
 void headset_start_pairing_mode(void){
-    main_state_summary();
+    headset.pairing_mode_enabled = 1;
     switch (headset.state){
         case BTSTACK_HEADSET_W4_TIMER:
             headset_auto_connect_timer_stop();
@@ -1480,7 +1612,7 @@ void headset_start_pairing_mode(void){
             gap_connectable_control(headset.gap_headset_connectable);
             headset.gap_headset_discoverable = HEADSET_DISCOVERABLE_WHEN_NOT_CONNECTED;
             gap_discoverable_control(headset.gap_headset_discoverable);
-            return;
+            break;
         
         case BTSTACK_HEADSET_W4_DISCONNECT:
             // wait for disconnect
@@ -1491,7 +1623,6 @@ void headset_start_pairing_mode(void){
             headset.disconnect = 1;
             break;
     }
-    headset.pairing_mode_enabled = 1;
     headset_run();
 }
 
@@ -1595,8 +1726,8 @@ static void show_usage(void){
     bd_addr_t      iut_address;
     gap_local_bd_addr(iut_address);
     printf("\n--- Bluetooth Headset Test Console %s ---\n", bd_addr_to_str(iut_address));
-    printf("c      - Connect to remote with address addr %s\n", bd_addr_to_str(device_addr));
-    printf("C      - Disconnect from remote with address addr %s\n", bd_addr_to_str(device_addr));
+    printf("c      - Connect to remote with address addr %s\n", bd_addr_to_str(headset.last_connected_device));
+    printf("C      - Disconnect from remote with address addr %s\n", bd_addr_to_str(headset.last_connected_device));
     printf("d      - Forget remote device with address %s\n", bd_addr_to_str(headset.last_connected_device));
     printf("D      - Forget all known remote devices\n");
     printf("p      - Start pairing mode\n");
@@ -1617,7 +1748,7 @@ static void stdin_process(char c){
     switch (cmd){
         case 'c':
             log_summary("Connect.");
-            headset_connect(device_addr);
+            headset_connect(headset.last_connected_device);
             break;
         case 'C':
             log_summary("Disconnect.");
@@ -1711,7 +1842,7 @@ int btstack_main(int argc, const char * argv[]){
     a2dp_sink_register_packet_handler(&a2dp_sink_packet_handler);
     a2dp_sink_register_media_handler(&handle_l2cap_media_data_packet);
 
-    uint8_t status = a2dp_sink_create_stream_endpoint(AVDTP_AUDIO, AVDTP_CODEC_SBC, media_sbc_codec_capabilities, sizeof(media_sbc_codec_capabilities), media_sbc_codec_configuration, sizeof(media_sbc_codec_configuration), &local_seid);
+    uint8_t status = a2dp_sink_create_stream_endpoint(AVDTP_AUDIO, AVDTP_CODEC_SBC, media_sbc_codec_capabilities, sizeof(media_sbc_codec_capabilities), media_sbc_codec_configuration, sizeof(media_sbc_codec_configuration), &a2dp_sink_local_seid);
     if (status != ERROR_CODE_SUCCESS){
         printf("A2DP Sink: not enough memory to create local stream endpoint\n");
         return 1;
@@ -1763,7 +1894,7 @@ int btstack_main(int argc, const char * argv[]){
 #ifdef HAVE_BTSTACK_STDIN
     select_phonebook(pb_name);
     // parse human readable Bluetooth address
-    sscanf_bd_addr(device_addr_string, device_addr);
+    // sscanf_bd_addr(device_addr_string, device_addr);
     btstack_stdin_setup(stdin_process);
 #endif
     headset_init();
