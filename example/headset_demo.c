@@ -69,6 +69,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <stdbool.h>
 
 #include "btstack.h"
 #include "headset.h"
@@ -88,11 +89,12 @@
 #define STORE_SBC_TO_WAV_FILE 
 #endif
 
-// #define MAIN_STATE_SUMMARY_ENABLED
+// #define BTSTACK_HEADSET_SUMMARY_ENABLED
 // #define GAP_TEST_LEGACY_PAIRING
 #define ENABLE_HFP
 #define ENABLE_A2DP
 #define ENABLE_AVRCP
+#define ENABLE_PBAP
 
 #define AVRCP_BROWSING_ENABLED 0
 
@@ -108,7 +110,7 @@
 #define LAST_CONNECTED_DEVICE_TAG 0x41414141
 
 
-#ifdef MAIN_STATE_SUMMARY_ENABLED
+#ifdef BTSTACK_HEADSET_SUMMARY_ENABLED
 static const char * headset_states[] = {
     "BTSTACK_HEADSET_IDLE",
     "BTSTACK_HEADSET_W4_CONNECTION_COMPLETE",
@@ -124,6 +126,7 @@ static const char * headset_states[] = {
 
     "BTSTACK_HEADSET_W4_HFP",
     "BTSTACK_HEADSET_HFP_DONE",
+
     "BTSTACK_HEADSET_W4_A2DP",
     "BTSTACK_HEADSET_A2DP_DONE",
     "BTSTACK_HEADSET_W4_AVRCP",
@@ -132,13 +135,7 @@ static const char * headset_states[] = {
     "BTSTACK_HEADSET_HID_DONE",
     "BTSTACK_HEADSET_W4_PABP_CHECK",
     "BTSTACK_HEADSET_PBAP_CHECK_DONE",
-    "BTSTACK_HEADSET_W4_PABP_CRC",
-    "BTSTACK_HEADSET_PBAP_CRC_DONE",
-    "BTSTACK_HEADSET_W4_PHONEBOOK_ERASE",
-    "BTSTACK_HEADSET_PHONEBOOK_ERASE_DONE",
-    "BTSTACK_HEADSET_W4_PBAP_UPDATE",
-    "BTSTACK_HEADSET_PBAP_UPDATE_DONE",
-
+    
     "BTSTACK_HEADSET_DONE",
     "BTSTACK_HEADSET_W4_DISCONNECT",
 };
@@ -168,13 +165,7 @@ typedef enum {
     BTSTACK_HEADSET_HID_DONE,
     BTSTACK_HEADSET_W4_PABP_CHECK,
     BTSTACK_HEADSET_PBAP_CHECK_DONE,
-    BTSTACK_HEADSET_W4_PABP_CRC,
-    BTSTACK_HEADSET_PBAP_CRC_DONE,
-    BTSTACK_HEADSET_W4_PHONEBOOK_ERASE,
-    BTSTACK_HEADSET_PHONEBOOK_ERASE_DONE,
-    BTSTACK_HEADSET_W4_PBAP_UPDATE,
-    BTSTACK_HEADSET_PBAP_UPDATE_DONE,
-
+    
     BTSTACK_HEADSET_DONE,
     BTSTACK_HEADSET_W4_DISCONNECT
 } btstack_headset_state_t;
@@ -211,6 +202,37 @@ typedef struct {
     uint8_t disconnect;
     uint8_t pairing_mode_enabled;
 } headset_connection_t;
+
+
+#ifdef ENABLE_HFP
+
+#ifdef ENABLE_PBAP
+#define BT_STRING_SIZE 24
+
+typedef enum {
+    PBAP_INIT,
+    PBAP_W4_CONNECTED_LOOKUP,
+    PBAP_W4_SET_PHONEBOOK_LOOKUP,
+    PBAP_W4_LOOKUP,
+    PBAP_W4_DISCONNECTED
+} pbap_state_t;
+
+// PBAP support
+typedef enum {
+   PBAP_LOOKUP_SUPPORT_UNKNOWN = 0,
+   PBAP_LOOKUP_SUPPORT_QUERY_ACTIVE,
+   PBAP_LOOKUP_SUPPORT_AVAILABLE,
+   PBAP_LOOKUP_SUPPORT_NOT_AVAILABLE
+} pbap_lookup_support_t;
+
+static pbap_state_t pbap_state = PBAP_INIT;
+static const char * phone_number;
+static uint16_t pbap_cid;
+
+static pbap_lookup_support_t pbap_status = PBAP_LOOKUP_SUPPORT_UNKNOWN;
+
+#endif
+#endif
 
 static headset_connection_t headset;
 static const btstack_tlv_t * btstack_tlv_impl;
@@ -332,7 +354,7 @@ static char phonebook_path[30];
 static int sim1_selected;
 
 static void main_state_summary(void){
-#ifdef MAIN_STATE_SUMMARY_ENABLED
+#ifdef BTSTACK_HEADSET_SUMMARY_ENABLED
     log_info("Main state: %s", headset_states[headset.state]);
     printf(" Main state: %s\n", headset_states[headset.state]);
 #endif
@@ -648,6 +670,7 @@ static void dump_sbc_configuration(avdtp_media_codec_configuration_sbc_t configu
     printf("\n");
 }
 
+#ifdef ENABLE_AVRCP
 static void avrcp_controller_packet_handler(uint8_t packet_type, uint16_t channel, uint8_t *packet, uint16_t size){
     UNUSED(channel);
     UNUSED(size);
@@ -791,6 +814,7 @@ static void avrcp_controller_packet_handler(uint8_t packet_type, uint16_t channe
             break;
     }  
 }
+#endif
 
 static int headset_hfp_hf_slc_active(void){
     return hfp_hf_acl_handle != HCI_CON_HANDLE_INVALID;
@@ -804,6 +828,8 @@ static int headset_avrcp_controller_connected(void){
     return avrcp_controller_cid != 0;
 }
 
+
+#ifdef ENABLE_HFP
 static void hfp_hf_packet_handler(uint8_t packet_type, uint16_t channel, uint8_t * packet, uint16_t packet_size){
     UNUSED(channel);
     bd_addr_t device_addr;
@@ -937,7 +963,9 @@ static void hfp_hf_packet_handler(uint8_t packet_type, uint16_t channel, uint8_t
     }
 
 }
+#endif
 
+#ifdef ENABLE_A2DP
 static void a2dp_sink_packet_handler(uint8_t packet_type, uint16_t channel, uint8_t *packet, uint16_t size){
     UNUSED(channel);
     UNUSED(size);
@@ -1036,6 +1064,131 @@ static void a2dp_sink_packet_handler(uint8_t packet_type, uint16_t channel, uint
             break; 
     }
 }
+#endif
+
+// PBAP / Phonebook
+#ifdef ENABLE_PBAP
+
+static int headset_pbap_check_complete(void){
+    switch (pbap_status){
+        case PBAP_LOOKUP_SUPPORT_AVAILABLE:
+        case PBAP_LOOKUP_SUPPORT_NOT_AVAILABLE:
+            return 1;
+        default:
+            return 0;
+    }
+}
+
+static uint8_t headset_pbap_lookup_supported(void) {
+    return (pbap_status == PBAP_LOOKUP_SUPPORT_AVAILABLE);
+}
+
+static void pbap_packet_handler(uint8_t packet_type, uint16_t channel, uint8_t *packet, uint16_t size){
+    UNUSED(channel);
+    UNUSED(size);
+    uint8_t status;
+    
+    if (packet_type != HCI_EVENT_PACKET) return;
+    if (hci_event_packet_get_type(packet) != HCI_EVENT_PBAP_META) return;
+
+    switch (hci_event_pbap_meta_get_subevent_code(packet)){
+        case PBAP_SUBEVENT_CONNECTION_OPENED:
+            if (pbap_state != PBAP_W4_CONNECTED_LOOKUP) break;
+
+            status = pbap_subevent_connection_opened_get_status(packet);
+            
+            if (status){
+                pbap_state = PBAP_INIT;
+                log_summary("PBAP: Connection failed");
+                // PBAP Check Done
+                switch (headset.state){
+                    case BTSTACK_HEADSET_W4_PABP_CHECK:
+                        log_summary("PBAP: Phone number lookup not supported");
+                        headset.state = BTSTACK_HEADSET_PBAP_CHECK_DONE;
+                        pbap_status = PBAP_LOOKUP_SUPPORT_NOT_AVAILABLE;
+                        break;
+                    default:
+                        log_summary("PBAP: Connection fails, main state unknown");
+                        break;
+                }
+                main_state_summary();
+            } else {
+                log_summary("PBAP: Connected");
+            
+                // enable flow control mode
+                pbap_set_flow_control_mode(pbap_cid, 1);
+
+                if (pbap_state == PBAP_W4_CONNECTED_LOOKUP){
+                    // set phonebook
+                    log_info("Set phonebook 'telecom'");
+                    pbap_set_phonebook(pbap_cid, "telecom");
+                    pbap_state = PBAP_W4_SET_PHONEBOOK_LOOKUP;
+                    break;
+                }
+                
+            }
+            break;
+        
+        case PBAP_SUBEVENT_CONNECTION_CLOSED:
+            log_summary("PBAP: Connection closed");
+            switch (headset.state){
+                case BTSTACK_HEADSET_W4_PABP_CHECK:  
+                    headset.state = BTSTACK_HEADSET_PBAP_CHECK_DONE;
+                    break;
+                default:
+                    break;
+            }
+            main_state_summary();
+            break;
+        
+        case PBAP_SUBEVENT_OPERATION_COMPLETED:
+            if (headset.state != BTSTACK_HEADSET_W4_PABP_CHECK) break;
+            status = pbap_subevent_operation_completed_get_status(packet);
+            if (status == 0){
+                log_summary("PBAP: Phone number lookup supported");
+                pbap_status = PBAP_LOOKUP_SUPPORT_AVAILABLE;
+            } else {
+                log_summary("PBAP: Phone number lookup not supported");
+                pbap_status = PBAP_LOOKUP_SUPPORT_NOT_AVAILABLE;
+                switch (pbap_state){
+                    case PBAP_W4_SET_PHONEBOOK_LOOKUP:
+                        log_info("Lookup number '%s'", phone_number);
+                        pbap_state = PBAP_W4_LOOKUP;
+                        pbap_lookup_by_number(pbap_cid, phone_number);
+                        break;
+                    case PBAP_W4_LOOKUP:
+                        // client receive PBAP_SUBEVENT_OPERATION_COMPLETED
+                        // (*client_handler)(packet_type, channel, packet, size);
+                        log_info("Lookup complete, disconnect");
+                        pbap_state = PBAP_W4_DISCONNECTED;
+                        pbap_disconnect(pbap_cid);
+                        break;
+                    default:
+                        break;                                
+                }
+            }
+            break;
+
+        default:
+            break;
+    }
+}
+
+
+uint8_t headset_pbap_lookup_number(const char * number){
+    // start state
+    pbap_state = PBAP_W4_CONNECTED_LOOKUP;
+    phone_number = number;
+
+    log_info("PABP: connect to %s\n", bd_addr_to_str(headset.remote_device_addr));
+    uint8_t status = pbap_connect(&pbap_packet_handler, headset.remote_device_addr, &pbap_cid);
+    if (status){
+        log_info("pbap_connect returned error 0x%02x\n", status);
+    }
+    return status;
+}
+
+#endif
 
 static void headset_notify_connected_successfully(void){
     printf("Notification: Device connected successfully to %s\n", bd_addr_to_str(headset.remote_device_addr));
@@ -1191,16 +1344,14 @@ static void headset_run(){
 #ifdef ENABLE_HFP
             // skip if already connected
             if (!headset_hfp_hf_slc_active()){
-                // assert SDP client is ready
-                if (!sdp_client_ready()) break;
-                log_summary("HFP HF, Establish Service level connection");
+                log_summary("HFP HF, Establish Service level connection.");
                 headset.state = BTSTACK_HEADSET_W4_HFP;
                 main_state_summary();
                 hfp_hf_establish_service_level_connection(headset.remote_device_addr);
                 break;
             } 
 
-            log_info("HFP HF: already connected, skip creating smartphone connection");
+            log_info("HFP HF: already connected, skip creating smartphone connection.");
 
             /*  fall through */
 
@@ -1210,17 +1361,14 @@ static void headset_run(){
 #ifdef ENABLE_A2DP
             // skip if already connected
             if (!headset_a2dp_sink_connected()){
-                // assert SDP client is ready
-                if (!sdp_client_ready()) break;
-
-                log_summary("A2DP Sink, Creating AVDTP connection to remote audio source (smartphone)");
+                log_summary("A2DP Sink, Creating AVDTP connection to remote audio source (smartphone).");
                 headset.state = BTSTACK_HEADSET_W4_A2DP;
                 main_state_summary();
                 a2dp_sink_establish_stream(headset.remote_device_addr, a2dp_sink_local_seid, &a2dp_sink_cid);
                 break;
             }
             
-            log_info("A2DP Sink: already connected, skip creating AVDTP connection");
+            log_summary("A2DP Sink: already connected, skip creating AVDTP connection.");
 
             /* fall through */
 
@@ -1229,26 +1377,41 @@ static void headset_run(){
 #ifdef ENABLE_AVRCP
             // skip if already  connected
             if (!headset_avrcp_controller_connected()){
-                // assert SDP client is ready
-                if (!sdp_client_ready()) break;
-
-                log_info("AVRCP Controller: Creating AVRCP connection to remote target (smartphone)");
+                log_summary("AVRCP Controller: Creating AVRCP connection to remote target (smartphone).");
                 headset.state = BTSTACK_HEADSET_W4_AVRCP;
                 main_state_summary();
                 status = avrcp_controller_connect(headset.remote_device_addr, &avrcp_controller_cid);
                 if (status != ERROR_CODE_SUCCESS){
-                    log_info("AVCRCP Controller: Could not perform command, status 0x%2x\n", status);
+                    log_summary("AVCRCP Controller: Could not perform command.");
                 }
                 break;
             }
 
-            log_info("AVRCP Controller: already connected, skip creating smartphone connection");
+            log_summary("AVRCP Controller: already connected, skip creating smartphone connection.");
 
             /* fall through */
 
         case BTSTACK_HEADSET_AVRCP_DONE:
 #endif
+#ifdef ENABLE_PBAP
+            // skip if already done or hfp not connected
+            if (headset_hfp_hf_slc_active() && !headset_pbap_check_complete()){
+                log_info("PBAP: test phone number lookup");
+                headset.state = BTSTACK_HEADSET_W4_PABP_CHECK;
 
+                headset_pbap_lookup_number("144");
+                pbap_status = PBAP_LOOKUP_SUPPORT_QUERY_ACTIVE;
+                break;
+            }
+            /* fall through */
+
+        case BTSTACK_HEADSET_PBAP_CHECK_DONE:
+            if (headset_hfp_hf_slc_active() && !headset_pbap_lookup_supported()){
+                log_summary("PBAP lookup not supported");
+            }
+            /* fall through */
+
+#endif
             headset.state = BTSTACK_HEADSET_DONE;
             main_state_summary();
             headset_notify_connected_successfully();
@@ -1318,6 +1481,22 @@ static int is_bd_address_known(bd_addr_t event_addr){
 
 
 #ifdef HAVE_BTSTACK_STDIN
+
+static void show_usage_pairing_mode(uint8_t hci_event_packet_type){
+    switch (hci_event_packet_type){
+        case HCI_EVENT_PIN_CODE_REQUEST:
+            printf("a      - Accept pin code\n");
+            printf("A      - Reject pin code\n");
+            break;
+        case HCI_EVENT_USER_CONFIRMATION_REQUEST:
+            printf("b      - Accept numeric comparison\n");
+            printf("B      - Reject numeric comparison\n");
+            break;
+        default:
+            break;
+    }
+}
+
 // packet handler for interactive console
 static void hci_packet_handler(uint8_t packet_type, uint16_t channel, uint8_t *packet, uint16_t size){
     UNUSED(channel);
@@ -1326,235 +1505,191 @@ static void hci_packet_handler(uint8_t packet_type, uint16_t channel, uint8_t *p
     bd_addr_t        event_addr;
     hci_con_handle_t con_handle;
     
-    int i;
     uint8_t status;
-    char buffer[32];
-                                
-    switch (packet_type){
-        case HCI_EVENT_PACKET:
-            switch (hci_event_packet_get_type(packet)) {
-                case BTSTACK_EVENT_STATE:
-                    // BTstack activated, get started 
-                    if (btstack_event_state_get_state(packet) == HCI_STATE_WORKING){
-                        btstack_tlv_get_instance(&btstack_tlv_impl, &btstack_tlv_context);
-                        log_info("TLV impl %p, context %p", btstack_tlv_impl, btstack_tlv_context);
-                        show_usage();
-                        headset_auto_connect_restart();
-                    }
-                    break;
+    
+    if (packet_type != HCI_EVENT_PACKET) return;
 
-                case HCI_EVENT_CONNECTION_REQUEST:
-                    main_state_summary();
-                    hci_event_connection_request_get_bd_addr(packet, event_addr);
-                    log_summary("Connection request.");
+    switch (hci_event_packet_get_type(packet)) {
+        case BTSTACK_EVENT_STATE:
+            // BTstack activated, get started 
+            if (btstack_event_state_get_state(packet) == HCI_STATE_WORKING){
+                btstack_tlv_get_instance(&btstack_tlv_impl, &btstack_tlv_context);
+                log_info("TLV impl %p, context %p", btstack_tlv_impl, btstack_tlv_context);
+                show_usage();
+                headset_auto_connect_restart();
+            }
+            break;
 
-                    switch (headset.state){
-                        case BTSTACK_HEADSET_IDLE:
-                        case BTSTACK_HEADSET_W4_TIMER:
-                            if (is_bd_address_known(event_addr)){
-                                // on incoming connection, postpone our own connection attempts (hopefully done then)
-                                memcpy(headset.remote_device_addr, event_addr, BD_ADDR_LEN);
-                                headset.remote_addr_valid = 1;
-                                log_summary("Device has been previously bonded, allow incoming connection.");
-                            } else if (headset.pairing_mode_enabled){
-                                // on incoming connection, postpone our own connection attempts (hopefully done then)
-                                memcpy(headset.remote_device_addr, event_addr, BD_ADDR_LEN);
-                                headset.remote_addr_valid = 1;
-                                log_summary("Unknown address, but pairing mode is on, allow incoming connection.");
-                            }                           
+        case HCI_EVENT_CONNECTION_REQUEST:
+            main_state_summary();
+            hci_event_connection_request_get_bd_addr(packet, event_addr);
+            log_summary("Connection request.");
 
-                            break;
-                        default:
-                            break;
-                    }
-                    break;
+            switch (headset.state){
+                case BTSTACK_HEADSET_IDLE:
+                case BTSTACK_HEADSET_W4_TIMER:
+                    if (is_bd_address_known(event_addr)){
+                        // on incoming connection, postpone our own connection attempts (hopefully done then)
+                        memcpy(headset.remote_device_addr, event_addr, BD_ADDR_LEN);
+                        headset.remote_addr_valid = 1;
+                        log_summary("Device has been previously bonded, allow incoming connection.");
+                    } else if (headset.pairing_mode_enabled){
+                        // on incoming connection, postpone our own connection attempts (hopefully done then)
+                        memcpy(headset.remote_device_addr, event_addr, BD_ADDR_LEN);
+                        headset.remote_addr_valid = 1;
+                        log_summary("Unknown address, but pairing mode is on, allow incoming connection.");
+                    }                           
 
-                case HCI_EVENT_CONNECTION_COMPLETE:
-                    hci_event_connection_complete_get_bd_addr(packet, event_addr);
-                    con_handle = hci_event_connection_complete_get_connection_handle(packet);
-                    status = hci_event_connection_complete_get_status(packet);
-
-                    switch(status){
-                        case ERROR_CODE_SUCCESS:
-                            // disconnect, if not from a known address
-                            if (!is_bd_address_known(event_addr)){
-                                if (!headset.pairing_mode_enabled) {
-                                    log_summary("Unknown device is connected, and pairing mode is disabled - disconnect.");
-                                    headset.state = BTSTACK_HEADSET_W4_DISCONNECT;
-                                    gap_disconnect(con_handle);
-                                    break;
-                                }
-                                log_summary("Unknown device is connected and pairing mode is enabled. Allow connect.");
-                            }
-
-                            headset.con_handle = con_handle;
-                            log_summary("Device connected.");
-                            main_state_summary();
-
-                            headset.gap_headset_connectable  = 0;
-                            gap_connectable_control(headset.gap_headset_connectable);
-                            headset.gap_headset_discoverable = 0;
-                            gap_discoverable_control(headset.gap_headset_discoverable);
-
-                            if (headset.pairing_mode_enabled) {
-                                headset_auto_connect_timer_stop();
-                                headset.state = BTSTACK_HEADSET_INCOMING_W4_AUTHENTICATION;
-                                main_state_summary();
-                                break;
-                            }
-
-                            switch (headset.state){
-                                case BTSTACK_HEADSET_W4_TIMER:
-                                case BTSTACK_HEADSET_W4_CONNECTION_COMPLETE:
-                                    headset_auto_connect_timer_stop();
-                                    headset.state = BTSTACK_HEADSET_CONNECTED;
-                                    headset.remote_addr_valid = 1;
-                                    break;
-                                default:
-                                    printf("start auto-connect? state %d\n", headset.state);
-                                    break;
-
-                            }
-                            main_state_summary();
-                            break;
-                        case ERROR_CODE_PAGE_TIMEOUT:
-                            if (headset.state != BTSTACK_HEADSET_W4_CONNECTION_COMPLETE) break;
-                            log_summary("Connection failed with page timetout, retry.");
-                            headset_auto_connect_restart();
-                            break;
-                        case ERROR_CODE_ACL_CONNECTION_ALREADY_EXISTS:
-                            if (headset.state != BTSTACK_HEADSET_W4_CONNECTION_COMPLETE) break;
-                            log_summary("Connection failed connection already exists, retry.");
-                            headset_auto_connect_restart();
-                            break;
-                        default:
-                            if (headset.state != BTSTACK_HEADSET_W4_CONNECTION_COMPLETE) break;
-                            log_summary("Connection failed, retry.");
-                            headset_auto_connect_restart();
-                            break;
-                    }
-                    break;
-
-                case HCI_EVENT_COMMAND_COMPLETE:
-                    if (!HCI_EVENT_IS_COMMAND_COMPLETE(packet, hci_write_link_supervision_timeout)) break;
-                    if (headset.state != BTSTACK_HEADSET_W4_LINK_SUPERVSION_TIMEOUT_UPDATE) break;
-                    headset.state = BTSTACK_HEADSET_LINK_SUPERVSION_TIMEOUT_UPDATE;
-                    break;
-
-                case HCI_EVENT_PIN_CODE_REQUEST:
-                    if (headset.state != BTSTACK_HEADSET_INCOMING_W4_AUTHENTICATION) break;
-                    headset.state = BTSTACK_HEADSET_INCOMING_W4_AUTHENTICATION_ANSWER;
-                    log_summary("Pin code request - using 0000. Wait for user confirmation...");
-                    hci_event_pin_code_request_get_bd_addr(packet, headset.remote_device_addr);
-                    break;
-
-                case HCI_EVENT_USER_CONFIRMATION_REQUEST:
-                    // inform about user confirmation request
-                    if (headset.state != BTSTACK_HEADSET_INCOMING_W4_AUTHENTICATION) break;
-                    // printf("GAP Headset: SSP User Confirmation Request with numeric value '%06"PRIu32"'\n", hci_event_user_confirmation_request_get_numeric_value(packet));
-                    log_summary("SPP mode, numeric comparison. Wait for user confirmation");
-                    headset.state = BTSTACK_HEADSET_INCOMING_W4_AUTHENTICATION_ANSWER;
-                    break;
-
-                case HCI_EVENT_AUTHENTICATION_COMPLETE_EVENT:
-                    if (hci_event_authentication_complete_get_connection_handle(packet) != headset.con_handle) break;
-                    status = hci_event_authentication_complete_get_status(packet);
-
-                    // abort auto-connection on authentication failure
-                    switch (status){
-                        case ERROR_CODE_SUCCESS:
-                            if (headset.state != BTSTACK_HEADSET_W4_AUTHENTICATION) break;
-                            headset.state = BTSTACK_HEADSET_AUTHENTICATION_DONE;
-                            log_summary("Device authenticated, auto-start services.");
-                            break;
-                        case ERROR_CODE_PIN_OR_KEY_MISSING:
-                            log_summary("Device does not have link key, dropping stored link key, disconnect.");
-                            gap_drop_link_key_for_bd_addr(headset.remote_device_addr);
-                            // disconnect
-                            headset.state = BTSTACK_HEADSET_W4_DISCONNECT;
-                            gap_disconnect(headset.con_handle);
-                            break;
-                        default:
-                            log_summary("Device authentication failed, disconnect");
-                            headset.state = BTSTACK_HEADSET_W4_DISCONNECT;
-                            gap_disconnect(headset.con_handle);
-                            break;
-                    }
-                    main_state_summary();
-                    break;
-
-                case HCI_EVENT_DISCONNECTION_COMPLETE:
-                    con_handle = hci_event_disconnection_complete_get_connection_handle(packet);
-                    if (con_handle == HCI_CON_HANDLE_INVALID) break;
-                    if (con_handle != headset.con_handle) break;
-                    
-                    headset.con_handle = HCI_CON_HANDLE_INVALID;
-                    log_summary("Device disconnected.");
-
-                    headset.state = BTSTACK_HEADSET_IDLE;
-                    headset.gap_headset_connectable  = HEADSET_CONNECTABLE_WHEN_NOT_CONNECTED;
-                    gap_connectable_control(headset.gap_headset_connectable);
-
-                    if (headset.pairing_mode_enabled){
-                        log_summary("Pairing mode is on.");
-                        headset.gap_headset_discoverable = HEADSET_DISCOVERABLE_WHEN_NOT_CONNECTED;
-                        gap_discoverable_control(headset.gap_headset_discoverable);
-                        break;
-                    }
-                    headset_auto_connect_restart();
-                    break;
-                
-                case HCI_EVENT_PBAP_META:
-                    switch (hci_event_pbap_meta_get_subevent_code(packet)){
-                        case PBAP_SUBEVENT_CONNECTION_OPENED:
-                            status = pbap_subevent_connection_opened_get_status(packet);
-                            if (status){
-                                printf("[!] Connection failed, status 0x%02x\n", status);
-                            } else {
-                                printf("[+] Connected\n");
-                            }
-                            break;
-                        case PBAP_SUBEVENT_CONNECTION_CLOSED:
-                            printf("[+] Connection closed\n");
-                            break;
-                        case PBAP_SUBEVENT_OPERATION_COMPLETED:
-                            printf("[+] Operation complete\n");
-                            break;
-                        case PBAP_SUBEVENT_AUTHENTICATION_REQUEST:
-                            printf("[?] Authentication requested\n");
-                            break;
-                        case PBAP_SUBEVENT_PHONEBOOK_SIZE:
-                            status = pbap_subevent_phonebook_size_get_status(packet);
-                            if (status){
-                                printf("[!] Get Phonebook size error: 0x%x\n", status);
-                            } else {
-                                printf("[+] Phonebook size: %u\n", pbap_subevent_phonebook_size_get_phoneboook_size(packet));
-                            }
-                            break;
-                        case PBAP_SUBEVENT_CARD_RESULT:
-                            memcpy(buffer, pbap_subevent_card_result_get_name(packet), pbap_subevent_card_result_get_name_len(packet));
-                            buffer[pbap_subevent_card_result_get_name_len(packet)] = 0;
-                            printf("[-] Name:   '%s'\n", buffer);
-                            memcpy(buffer, pbap_subevent_card_result_get_handle(packet), pbap_subevent_card_result_get_handle_len(packet));
-                            buffer[pbap_subevent_card_result_get_handle_len(packet)] = 0;
-                            printf("[-] Handle: '%s'\n", buffer);
-                            break;
-                        default:
-                            break;
-                    }
                     break;
                 default:
                     break;
             }
             break;
-        case PBAP_DATA_PACKET:
-            for (i=0;i<size;i++){
-                printf("%c", packet[i]);
+
+        case HCI_EVENT_CONNECTION_COMPLETE:
+            hci_event_connection_complete_get_bd_addr(packet, event_addr);
+            con_handle = hci_event_connection_complete_get_connection_handle(packet);
+            status = hci_event_connection_complete_get_status(packet);
+
+            switch(status){
+                case ERROR_CODE_SUCCESS:
+                    // disconnect, if not from a known address
+                    if (!is_bd_address_known(event_addr)){
+                        if (!headset.pairing_mode_enabled) {
+                            log_summary("Unknown device is connected, and pairing mode is disabled - disconnect.");
+                            headset.state = BTSTACK_HEADSET_W4_DISCONNECT;
+                            gap_disconnect(con_handle);
+                            break;
+                        }
+                        log_summary("Unknown device is connected and pairing mode is enabled. Allow connect.");
+                    }
+
+                    headset.con_handle = con_handle;
+                    log_summary("Device connected.");
+                    main_state_summary();
+
+                    headset.gap_headset_connectable  = 0;
+                    gap_connectable_control(headset.gap_headset_connectable);
+                    headset.gap_headset_discoverable = 0;
+                    gap_discoverable_control(headset.gap_headset_discoverable);
+
+                    if (headset.pairing_mode_enabled) {
+                        headset_auto_connect_timer_stop();
+                        headset.state = BTSTACK_HEADSET_INCOMING_W4_AUTHENTICATION;
+                        main_state_summary();
+                        break;
+                    }
+
+                    switch (headset.state){
+                        case BTSTACK_HEADSET_W4_TIMER:
+                        case BTSTACK_HEADSET_W4_CONNECTION_COMPLETE:
+                            headset_auto_connect_timer_stop();
+                            headset.state = BTSTACK_HEADSET_CONNECTED;
+                            headset.remote_addr_valid = 1;
+                            break;
+                        default:
+                            printf("start auto-connect? state %d\n", headset.state);
+                            break;
+
+                    }
+                    main_state_summary();
+                    break;
+                case ERROR_CODE_PAGE_TIMEOUT:
+                    if (headset.state != BTSTACK_HEADSET_W4_CONNECTION_COMPLETE) break;
+                    log_summary("Connection failed with page timetout, retry.");
+                    headset_auto_connect_restart();
+                    break;
+                case ERROR_CODE_ACL_CONNECTION_ALREADY_EXISTS:
+                    if (headset.state != BTSTACK_HEADSET_W4_CONNECTION_COMPLETE) break;
+                    log_summary("Connection failed connection already exists, retry.");
+                    headset_auto_connect_restart();
+                    break;
+                default:
+                    if (headset.state != BTSTACK_HEADSET_W4_CONNECTION_COMPLETE) break;
+                    log_summary("Connection failed, retry.");
+                    headset_auto_connect_restart();
+                    break;
             }
+            break;
+
+        case HCI_EVENT_COMMAND_COMPLETE:
+            if (!HCI_EVENT_IS_COMMAND_COMPLETE(packet, hci_write_link_supervision_timeout)) break;
+            if (headset.state != BTSTACK_HEADSET_W4_LINK_SUPERVSION_TIMEOUT_UPDATE) break;
+            headset.state = BTSTACK_HEADSET_LINK_SUPERVSION_TIMEOUT_UPDATE;
+            break;
+
+        case HCI_EVENT_PIN_CODE_REQUEST:
+            if (headset.state != BTSTACK_HEADSET_INCOMING_W4_AUTHENTICATION) break;
+            headset.state = BTSTACK_HEADSET_INCOMING_W4_AUTHENTICATION_ANSWER;
+            log_summary("Pin code request - using 0000. Wait for user confirmation:");
+            show_usage_pairing_mode(hci_event_packet_get_type(packet));
+            hci_event_pin_code_request_get_bd_addr(packet, headset.remote_device_addr);
+            break;
+
+        case HCI_EVENT_USER_CONFIRMATION_REQUEST:
+            // inform about user confirmation request
+            if (headset.state != BTSTACK_HEADSET_INCOMING_W4_AUTHENTICATION) break;
+            // printf("GAP Headset: SSP User Confirmation Request with numeric value '%06"PRIu32"'\n", hci_event_user_confirmation_request_get_numeric_value(packet));
+            log_summary("SPP mode, numeric comparison. Wait for user confirmation:");
+            show_usage_pairing_mode(hci_event_packet_get_type(packet));
+            headset.state = BTSTACK_HEADSET_INCOMING_W4_AUTHENTICATION_ANSWER;
+            break;
+
+        case HCI_EVENT_AUTHENTICATION_COMPLETE_EVENT:
+            if (hci_event_authentication_complete_get_connection_handle(packet) != headset.con_handle) break;
+            status = hci_event_authentication_complete_get_status(packet);
+
+            // abort auto-connection on authentication failure
+            switch (status){
+                case ERROR_CODE_SUCCESS:
+                    if (headset.state != BTSTACK_HEADSET_W4_AUTHENTICATION) break;
+                    headset.state = BTSTACK_HEADSET_AUTHENTICATION_DONE;
+                    log_summary("Device authenticated, auto-start services.");
+                    break;
+                case ERROR_CODE_PIN_OR_KEY_MISSING:
+                    log_summary("Device does not have link key, dropping stored link key, disconnect.");
+                    gap_drop_link_key_for_bd_addr(headset.remote_device_addr);
+                    // disconnect
+                    headset.state = BTSTACK_HEADSET_W4_DISCONNECT;
+                    gap_disconnect(headset.con_handle);
+                    break;
+                default:
+                    log_summary("Device authentication failed, disconnect");
+                    headset.state = BTSTACK_HEADSET_W4_DISCONNECT;
+                    gap_disconnect(headset.con_handle);
+                    break;
+            }
+            main_state_summary();
+            break;
+
+        case HCI_EVENT_DISCONNECTION_COMPLETE:
+            con_handle = hci_event_disconnection_complete_get_connection_handle(packet);
+            if (con_handle == HCI_CON_HANDLE_INVALID) break;
+            if (con_handle != headset.con_handle) break;
+            
+            headset.con_handle = HCI_CON_HANDLE_INVALID;
+            log_summary("Device disconnected.");
+
+            headset.state = BTSTACK_HEADSET_IDLE;
+            headset.gap_headset_connectable  = HEADSET_CONNECTABLE_WHEN_NOT_CONNECTED;
+            gap_connectable_control(headset.gap_headset_connectable);
+
+            if (headset.pairing_mode_enabled){
+                log_summary("Pairing mode is on.");
+                headset.gap_headset_discoverable = HEADSET_DISCOVERABLE_WHEN_NOT_CONNECTED;
+                gap_discoverable_control(headset.gap_headset_discoverable);
+                break;
+            }
+            headset_auto_connect_restart();
+            break;
+
+        case HCI_EVENT_PBAP_META:
+            pbap_packet_handler(packet_type, channel, packet, size);
             break;
         default:
             break;
     }
+
     headset_run();
 }
 
@@ -1732,11 +1867,12 @@ static void show_usage(void){
     printf("D      - Forget all known remote devices\n");
     printf("p      - Start pairing mode\n");
     printf("P      - Stop pairing mode\n");
-
+    
     printf("a      - Accept pin code\n");
     printf("A      - Reject pin code\n");
-    printf("b      - Accept pin code\n");
-    printf("B      - Reject pin code\n");
+    printf("b      - Accept numeric comparison\n");
+    printf("B      - Reject numeric comparison\n");
+
     printf("\n");
     printf("---\n");
 }
@@ -1812,12 +1948,6 @@ int btstack_main(int argc, const char * argv[]){
     // init RFCOMM
     rfcomm_init();
 
-    // init GOEP Client
-    goep_client_init();
-
-    // init PBAP Client
-    pbap_client_init();
-
     // initialize HFP HF
     uint16_t hf_supported_features          =
         (1<<HFP_HFSF_ESCO_S4)               |
@@ -1871,6 +2001,17 @@ int btstack_main(int argc, const char * argv[]){
     memset(hfp_service_buffer, 0, sizeof(hfp_service_buffer));
     hfp_hf_create_sdp_record(hfp_service_buffer, 0x10003, rfcomm_channel_nr, hfp_hf_service_name, hf_supported_features, wide_band_speech);
     sdp_register_service(hfp_service_buffer);
+#endif
+
+#ifdef ENABLE_HID
+    
+#endif
+#ifdef ENABLE_PBAP
+    // init GOEP Client
+    goep_client_init();
+
+    // init PBAP Client
+    pbap_client_init();
 #endif
 
     gap_set_local_name("Headset Demo 00:00:00:00:00:00");

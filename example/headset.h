@@ -102,6 +102,11 @@ void headset_forget_device(bd_addr_t remote_device_address);
  */
 void headset_forget_all_devices(void);
 
+/*
+ * Connect to remote device, and query number
+ * @param number
+ */
+uint8_t headset_pbap_lookup_number(const char * number);
 
 /* TODO:
  */
