@@ -306,6 +306,17 @@ typedef struct {
     int frames_per_buffer;
 } avdtp_media_codec_configuration_sbc_t;
 
+static uint8_t events_num = 1;
+
+static uint8_t events[] = {
+    AVRCP_NOTIFICATION_EVENT_VOLUME_CHANGED
+};
+
+static uint8_t companies_num = 1;
+static uint8_t companies[] = {
+    0x00, 0x19, 0x58 //BT SIG registered CompanyID
+};
+
 #ifdef HAVE_BTSTACK_STDIN
 // static bd_addr_t device_addr;
 //  iPhone 
@@ -326,8 +337,11 @@ static int media_initialized = 0;
 
 static uint16_t a2dp_sink_connected = 0;
 static uint16_t avrcp_controller_cid = 0;
-static uint8_t  avrcp_connected = 0;
+static uint16_t avrcp_target_cid = 0;
+static int volume_percentage = 0; 
+
 static uint8_t  sdp_avrcp_controller_service_buffer[200];
+static uint8_t  sdp_avrcp_target_service_buffer[150];
 
 static uint8_t hfp_service_buffer[150];
 static const uint8_t   rfcomm_channel_nr = 1;
@@ -429,6 +443,7 @@ static uint8_t media_sbc_codec_configuration[] = {
 
 static void hfp_hf_packet_handler(uint8_t packet_type, uint16_t channel, uint8_t * packet, uint16_t packet_size);
 static void a2dp_sink_packet_handler(uint8_t packet_type, uint16_t channel, uint8_t * packet, uint16_t packet_size);
+static void avrcp_target_packet_handler(uint8_t packet_type, uint16_t channel, uint8_t *packet, uint16_t size);
 static void avrcp_controller_packet_handler(uint8_t packet_type, uint16_t channel, uint8_t *packet, uint16_t size);
 static void hci_packet_handler(uint8_t packet_type, uint16_t channel, uint8_t *packet, uint16_t size);
 static void handle_l2cap_media_data_packet(uint8_t seid, uint8_t *packet, uint16_t size);
@@ -523,9 +538,9 @@ static int media_processing_init(avdtp_media_codec_configuration_sbc_t configura
     btstack_ring_buffer_init(&decoded_audio_ring_buffer, decoded_audio_storage, sizeof(decoded_audio_storage));
 
     // setup audio playback
-    const btstack_audio_t * audio = btstack_audio_get_instance();
-    if (audio){
-        audio->init(NUM_CHANNELS, configuration.sampling_frequency, &playback_handler, NULL);
+    const btstack_audio_sink_t * audio_sink = btstack_audio_sink_get_instance();
+    if (audio_sink){
+        audio_sink->init(NUM_CHANNELS, configuration.sampling_frequency, &playback_handler);
     }
 
     audio_stream_started = 0;
@@ -552,9 +567,9 @@ static void media_processing_close(void){
 #endif     
 
     // stop audio playback
-    const btstack_audio_t * audio = btstack_audio_get_instance();
-    if (audio){
-        audio->close();
+    const btstack_audio_sink_t * audio_sink = btstack_audio_sink_get_instance();
+    if (audio_sink){
+        audio_sink->close();
     }
 }
 
@@ -571,10 +586,10 @@ static void handle_l2cap_media_data_packet(uint8_t seid, uint8_t *packet, uint16
     avdtp_sbc_codec_header_t sbc_header;
     if (!read_sbc_header(packet, size, &pos, &sbc_header)) return;
 
-    const btstack_audio_t * audio = btstack_audio_get_instance();
+    const btstack_audio_sink_t * audio_sink = btstack_audio_sink_get_instance();
 
     // process data right away if there's no audio implementation active, e.g. on posix systems to store as .wav
-    if (!audio){
+    if (!audio_sink){
         btstack_sbc_decoder_process_data(&sbc_decoder_state, 0, packet+pos, size-pos);
         return;
     }
@@ -602,8 +617,8 @@ static void handle_l2cap_media_data_packet(uint8_t seid, uint8_t *packet, uint16
     if (!audio_stream_started && sbc_frames_in_buffer >= (OPTIMAL_FRAMES_MAX+OPTIMAL_FRAMES_MIN)/2){
         audio_stream_started = 1;
         // setup audio playback
-        if (audio){
-            audio->start_stream();
+        if (audio_sink){
+            audio_sink->start_stream();
         }
     }
 }
@@ -671,6 +686,116 @@ static void dump_sbc_configuration(avdtp_media_codec_configuration_sbc_t configu
 }
 
 #ifdef ENABLE_AVRCP
+static void avrcp_target_packet_handler(uint8_t packet_type, uint16_t channel, uint8_t *packet, uint16_t size){
+    UNUSED(channel);
+    UNUSED(size);
+    bd_addr_t address;
+    uint16_t local_cid;
+    uint8_t  status = ERROR_CODE_SUCCESS;
+
+    if (packet_type != HCI_EVENT_PACKET) return;
+    if (hci_event_packet_get_type(packet) != HCI_EVENT_AVRCP_META) return;
+    
+    int volume;
+
+    switch (packet[2]){
+        case AVRCP_SUBEVENT_NOTIFICATION_VOLUME_CHANGED:
+            volume = avrcp_subevent_notification_volume_changed_get_absolute_volume(packet);
+            volume_percentage = volume * 100 / 127;
+            printf("AVRCP Target    : Volume set to %d%% (%d)\n", volume_percentage, volume);
+            break;
+        case AVRCP_SUBEVENT_CONNECTION_ESTABLISHED: 
+            local_cid = avrcp_subevent_connection_established_get_avrcp_cid(packet);
+            if (avrcp_target_cid != 0 && avrcp_target_cid != local_cid) {
+                printf("AVRCP Target    : Connection failed, expected 0x%02X cid, received 0x%02X\n", avrcp_target_cid, local_cid);
+                return;
+            }
+
+            status = avrcp_subevent_connection_established_get_status(packet);
+            if (status != ERROR_CODE_SUCCESS){
+                printf("AVRCP Target    : Connection failed: status 0x%02x\n", status);
+                avrcp_target_cid = 0;
+                return;
+            }
+            avrcp_target_cid = local_cid;
+            avrcp_subevent_connection_established_get_bd_addr(packet, address);
+            printf("AVRCP Target    : Connected to %s, cid 0x%02x\n", bd_addr_to_str(address), avrcp_target_cid);
+            break;
+        case AVRCP_SUBEVENT_EVENT_IDS_QUERY:
+            status = avrcp_target_supported_events(avrcp_target_cid, events_num, events, sizeof(events));
+            break;
+        case AVRCP_SUBEVENT_COMPANY_IDS_QUERY:
+            status = avrcp_target_supported_companies(avrcp_target_cid, companies_num, companies, sizeof(companies));
+            break;
+        case AVRCP_SUBEVENT_OPERATION:{
+            avrcp_operation_id_t operation_id = avrcp_subevent_operation_get_operation_id(packet);
+            // if (!media_tracker.connected) break;
+            switch (operation_id){
+                case AVRCP_OPERATION_ID_PLAY:
+                    printf("AVRCP Target    : PLAY\n");
+                    break;
+                case AVRCP_OPERATION_ID_PAUSE:
+                    printf("AVRCP Target    : PAUSE\n");
+                    break;
+                case AVRCP_OPERATION_ID_STOP:
+                    printf("AVRCP Target    : STOP\n");
+                    break;
+                case AVRCP_OPERATION_ID_REWIND:
+                    printf("AVRCP Target    : REWIND\n");
+                    break;
+                case AVRCP_OPERATION_ID_FAST_FORWARD:
+                    printf("AVRCP Target    : FAST_FORWARD\n");
+                    break;
+                case AVRCP_OPERATION_ID_FORWARD:
+                    printf("AVRCP Target    : FORWARD\n");
+                    break;
+                case AVRCP_OPERATION_ID_BACKWARD:
+                    printf("AVRCP Target    : BACKWARD\n");
+                    break;
+                case AVRCP_OPERATION_ID_SKIP:
+                    printf("AVRCP Target    : SKIP\n");
+                    break;
+                case AVRCP_OPERATION_ID_MUTE:
+                    printf("AVRCP Target    : MUTE\n");
+                    break;
+                case AVRCP_OPERATION_ID_CHANNEL_UP:
+                    printf("AVRCP Target    : CHANNEL_UP\n");
+                    break;
+                case AVRCP_OPERATION_ID_CHANNEL_DOWN:
+                    printf("AVRCP Target    : CHANNEL_DOWN\n");
+                    break;
+                case AVRCP_OPERATION_ID_SELECT:
+                    printf("AVRCP Target    : SELECT\n");
+                    break;
+                case AVRCP_OPERATION_ID_UP:
+                    printf("AVRCP Target    : UP\n");
+                    break;
+                case AVRCP_OPERATION_ID_DOWN:
+                    printf("AVRCP Target    : DOWN\n");
+                    break;
+                case AVRCP_OPERATION_ID_LEFT:
+                    printf("AVRCP Target    : LEFT\n");
+                    break;
+                case AVRCP_OPERATION_ID_RIGHT:
+                    printf("AVRCP Target    : RIGTH\n");
+                    break;
+                case AVRCP_OPERATION_ID_ROOT_MENU:
+                    printf("AVRCP Target    : ROOT_MENU\n");
+                    break;
+                default:
+                    return;
+            }
+            break;
+        }
+        case AVRCP_SUBEVENT_CONNECTION_RELEASED:
+            printf("AVRCP Target    : Disconnected, cid 0x%02x\n", avrcp_subevent_connection_released_get_avrcp_cid(packet));
+            return;
+        default:
+            printf("AVRCP Target    : Event 0x%02x is not parsed\n", packet[2]);
+            break;
+    }
+}
+
 static void avrcp_controller_packet_handler(uint8_t packet_type, uint16_t channel, uint8_t *packet, uint16_t size){
     UNUSED(channel);
     UNUSED(size);
@@ -696,7 +821,6 @@ static void avrcp_controller_packet_handler(uint8_t packet_type, uint16_t channe
             }
             
             avrcp_controller_cid = local_cid;
-            avrcp_connected = 1;
             avrcp_subevent_connection_established_get_bd_addr(packet, adress);
             printf("Headsed AVRCP: Channel successfully opened: %s, avrcp_cid 0x%02x\n", bd_addr_to_str(adress), avrcp_controller_cid);
 
@@ -713,7 +837,6 @@ static void avrcp_controller_packet_handler(uint8_t packet_type, uint16_t channe
         case AVRCP_SUBEVENT_CONNECTION_RELEASED:
             printf("Headsed AVRCP: Channel released: avrcp_cid 0x%02x\n", avrcp_subevent_connection_released_get_avrcp_cid(packet));
             avrcp_controller_cid = 0;
-            avrcp_connected = 0;
             return;
         default:
             break;
@@ -1980,7 +2103,10 @@ int btstack_main(int argc, const char * argv[]){
     // Initialize AVRCP COntroller
     avrcp_controller_init();
     avrcp_controller_register_packet_handler(&avrcp_controller_packet_handler);
-    
+    // Initialize AVRCP Target
+    avrcp_target_init();
+    avrcp_target_register_packet_handler(&avrcp_target_packet_handler);
+
     // Initialize SDP 
     sdp_init();
 
@@ -1992,9 +2118,19 @@ int btstack_main(int argc, const char * argv[]){
 
     // setup AVRCP
     memset(sdp_avrcp_controller_service_buffer, 0, sizeof(sdp_avrcp_controller_service_buffer));
-    avrcp_controller_create_sdp_record(sdp_avrcp_controller_service_buffer, 0x10002, AVRCP_BROWSING_ENABLED, 1, NULL, NULL);
+    uint16_t controller_supported_features = (1 << AVRCP_TARGET_SUPPORTED_FEATURE_CATEGORY_MONITOR_OR_AMPLIFIER);
+#ifdef AVRCP_BROWSING_ENABLED
+    controller_supported_features |= (1 << AVRCP_CONTROLLER_SUPPORTED_FEATURE_BROWSING);
+#endif
+    avrcp_controller_create_sdp_record(sdp_avrcp_controller_service_buffer, 0x10002, controller_supported_features, NULL, NULL);
     sdp_register_service(sdp_avrcp_controller_service_buffer);
 #endif
+        // setup AVRCP Target
+    memset(sdp_avrcp_target_service_buffer, 0, sizeof(sdp_avrcp_target_service_buffer));
+    uint16_t target_supported_features = (1 << AVRCP_TARGET_SUPPORTED_FEATURE_CATEGORY_MONITOR_OR_AMPLIFIER);
+    avrcp_target_create_sdp_record(sdp_avrcp_target_service_buffer, 0x10003, target_supported_features, NULL, NULL);
+    sdp_register_service(sdp_avrcp_target_service_buffer);
+
 
 #ifdef ENABLE_HFP
     // setup HFP HF

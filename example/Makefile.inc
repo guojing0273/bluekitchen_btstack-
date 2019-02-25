@@ -346,7 +346,7 @@ nordic_spp_le_streamer: nordic_spp_le_streamer.h ${CORE_OBJ} ${COMMON_OBJ} ${ATT
 ublox_spp_le_counter: ublox_spp_le_counter.h ${CORE_OBJ} ${COMMON_OBJ} ${ATT_OBJ} ${GATT_SERVER_OBJ} ${SM_OBJ} device_information_service_server.o ublox_spp_service_server.o ublox_spp_le_counter.c
 	${CC} $(filter-out ublox_spp_le_counter.h,$^) ${CFLAGS} ${LDFLAGS} -o $@
 
-headset_demo: ${CORE_OBJ} ${COMMON_OBJ} ${CLASSIC_OBJ} ${SDP_CLIENT} ${SDP_CLIENT} ${AVDTP_OBJ} ${SBC_DECODER_OBJ} ${SBC_ENCODER_OBJ} ${CVSD_PLC_OBJ} md5.o obex_iterator.o goep_client.o yxml.o pbap_client.o avrcp.o avrcp_controller.o wav_util.o sco_demo_util.o btstack_ring_buffer.o hfp.o hfp_hf.o headset_demo.c
+headset_demo: ${CORE_OBJ} ${COMMON_OBJ} ${CLASSIC_OBJ} ${SDP_CLIENT} ${SDP_CLIENT} ${AVDTP_OBJ} ${SBC_DECODER_OBJ} ${SBC_ENCODER_OBJ} ${CVSD_PLC_OBJ} md5.o obex_iterator.o goep_client.o yxml.o pbap_client.o avrcp.o avrcp_controller.o avrcp_target.o wav_util.o sco_demo_util.o btstack_ring_buffer.o hfp.o hfp_hf.o headset_demo.c
 	${CC} $^ ${CFLAGS} ${LDFLAGS} -o $@
 
 
