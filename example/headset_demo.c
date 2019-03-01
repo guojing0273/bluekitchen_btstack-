@@ -856,7 +856,7 @@ static void avrcp_controller_packet_handler(uint8_t packet_type, uint16_t channe
                 break;
             }
             default:
-                printf("Headsed AVRCP:  INTERIM response \n"); 
+                // printf("Headsed AVRCP:  INTERIM response \n"); 
                 break;
         }
         return;
@@ -953,10 +953,19 @@ static int headset_avrcp_controller_connected(void){
 
 
 #ifdef ENABLE_HFP
+
+static uint8_t headset_hfp_hf_answer_incoming_call(void){
+    hfp_hf_answer_incoming_call(hfp_hf_acl_handle);
+    return 0;
+}
+static uint8_t headset_hfp_hf_terminate_call(void){
+    hfp_hf_terminate_call(hfp_hf_acl_handle);
+    return 0;
+}
+
 static void hfp_hf_packet_handler(uint8_t packet_type, uint16_t channel, uint8_t * packet, uint16_t packet_size){
     UNUSED(channel);
     bd_addr_t device_addr;
-
     switch (packet_type){
         case HCI_SCO_DATA_PACKET:
             if (READ_SCO_CONNECTION_HANDLE(packet) != sco_handle) break;
@@ -964,6 +973,7 @@ static void hfp_hf_packet_handler(uint8_t packet_type, uint16_t channel, uint8_t
             break;
 
         case HCI_EVENT_PACKET:
+            // printf("hfp_hf_packet_handler HCI_EVENT_PACKET type 0x%02x\n", hci_event_packet_get_type(packet));
             switch (hci_event_packet_get_type(packet)){
                 case HCI_EVENT_SCO_CAN_SEND_NOW:
                     sco_demo_send(sco_handle);
@@ -980,18 +990,18 @@ static void hfp_hf_packet_handler(uint8_t packet_type, uint16_t channel, uint8_t
                         case HFP_SUBEVENT_SERVICE_LEVEL_CONNECTION_ESTABLISHED:
                             hfp_subevent_service_level_connection_established_get_bd_addr(packet, device_addr);
                             if (memcmp(device_addr,headset.remote_device_addr, BD_ADDR_LEN) != 0) {
-                                log_summary("HFP HF, unexpected remote address, disconnect SLC.");
+                                log_summary("Headset HFP: unexpected remote address, disconnect SLC.");
                                 hfp_hf_release_service_level_connection(hfp_subevent_service_level_connection_established_get_con_handle(packet));
                                 break;
                             }
                             if (headset.state != BTSTACK_HEADSET_W4_HFP) break;
                             headset.state = BTSTACK_HEADSET_HFP_DONE;
                             hfp_hf_acl_handle = hfp_subevent_service_level_connection_established_get_con_handle(packet);
-                            log_summary("HFP HF, Service level connection established");
+                            log_summary("Headset HFP: Service level connection established");
                             break;
                         case HFP_SUBEVENT_SERVICE_LEVEL_CONNECTION_RELEASED:
                             hfp_hf_acl_handle = HCI_CON_HANDLE_INVALID;
-                            printf("Headset HFP:Service level connection released.\n\n");
+                            printf("Headset HFP: Service level connection released.\n\n");
                             break;
                         case HFP_SUBEVENT_AUDIO_CONNECTION_ESTABLISHED:
                             if (hfp_subevent_audio_connection_established_get_status(packet)){
@@ -1134,7 +1144,6 @@ static void a2dp_sink_packet_handler(uint8_t packet_type, uint16_t channel, uint
             a2dp_subevent_stream_established_get_bd_addr(packet, address);
             status = a2dp_subevent_stream_established_get_status(packet);
             cid = a2dp_subevent_stream_established_get_a2dp_cid(packet);
-            printf("A2DP_SUBEVENT_STREAM_ESTABLISHED %d, %d \n", cid, a2dp_sink_cid);
             if (!a2dp_sink_cid){
                 // incoming connection
                 a2dp_sink_cid = cid;
@@ -1467,14 +1476,14 @@ static void headset_run(){
 #ifdef ENABLE_HFP
             // skip if already connected
             if (!headset_hfp_hf_slc_active()){
-                log_summary("HFP HF, Establish Service level connection.");
+                log_summary("Headset HFP: Establish Service level connection.");
                 headset.state = BTSTACK_HEADSET_W4_HFP;
                 main_state_summary();
                 hfp_hf_establish_service_level_connection(headset.remote_device_addr);
                 break;
             } 
 
-            log_info("HFP HF: already connected, skip creating smartphone connection.");
+            log_info("Headset HFP: already connected, skip creating smartphone connection.");
 
             /*  fall through */
 
@@ -1984,17 +1993,24 @@ static void show_usage(void){
     bd_addr_t      iut_address;
     gap_local_bd_addr(iut_address);
     printf("\n--- Bluetooth Headset Test Console %s ---\n", bd_addr_to_str(iut_address));
+    
+    printf("*** GAP\n");
     printf("c      - Connect to remote with address addr %s\n", bd_addr_to_str(headset.last_connected_device));
     printf("C      - Disconnect from remote with address addr %s\n", bd_addr_to_str(headset.last_connected_device));
     printf("d      - Forget remote device with address %s\n", bd_addr_to_str(headset.last_connected_device));
     printf("D      - Forget all known remote devices\n");
     printf("p      - Start pairing mode\n");
     printf("P      - Stop pairing mode\n");
-    
     printf("a      - Accept pin code\n");
     printf("A      - Reject pin code\n");
     printf("b      - Accept numeric comparison\n");
     printf("B      - Reject numeric comparison\n");
+    printf("");
+
+    printf("*** HFP\n");
+    printf("h      - Answer incoming call");
+    printf("H      - Hangup call");
+    printf("");
 
     printf("\n");
     printf("---\n");
@@ -2045,7 +2061,15 @@ static void stdin_process(char c){
             log_summary("Reject Secure Simple Pairing (passkey).");
             headset_ssp_reject();
             break;
-
+        case 'h':
+            printf("Accept incoming call.\n");
+            headset_hfp_hf_answer_incoming_call();
+            break;
+        case 'H':
+            printf("Hangup call.\n");
+            headset_hfp_hf_terminate_call();
+            break;
+            
         case '\n':
         case '\r':
             break;
