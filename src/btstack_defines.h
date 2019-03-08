@@ -114,7 +114,12 @@ typedef uint8_t sm_key_t[16];
 // AVRCP browsing data
 #define AVRCP_BROWSING_DATA_PACKET     0x0f
 
+// BIP data
+#define BIP_DATA_PACKET         0x10
  
+// MAP data
+#define MAP_DATA_PACKET         0x11
+
 // debug log messages
 #define LOG_MESSAGE_PACKET      0xfc
 
@@ -1028,6 +1033,8 @@ typedef uint8_t sm_key_t[16];
 #define HCI_EVENT_A2DP_META                                0xF0
 #define HCI_EVENT_HIDS_META                                0xF1
 #define HCI_EVENT_GATTSERVICE_META                         0xF2
+#define HCI_EVENT_BIP_META                                 0xF3
+#define HCI_EVENT_MAP_META                                 0xF4
 
 // Potential other meta groups
 // #define HCI_EVENT_BNEP_META                                0xxx
@@ -2228,4 +2235,56 @@ typedef uint8_t sm_key_t[16];
  * @param con_handle
 */
 #define GATTSERVICE_SUBEVENT_CYCLING_POWER_BROADCAST_STOP                  0x03
+
+/**
+ * @format 121BH1
+ * @param subevent_code
+ * @param bip_cid
+ * @param status
+ * @param bd_addr
+ * @param con_handle
+ * @param incoming
+ */
+#define BIP_SUBEVENT_CONNECTION_OPENED                                    0x01
+
+/**
+ * @format 12
+ * @param subevent_code
+ * @param goep_cid
+*/
+#define BIP_SUBEVENT_CONNECTION_CLOSED                                    0x02
+
+/**
+ * @format 121
+ * @param subevent_code
+ * @param goep_cid
+ * @param status
+ */
+#define BIP_SUBEVENT_OPERATION_COMPLETED                                  0x03
+
+/**
+ * @format 121BH1
+ * @param subevent_code
+ * @param map_cid
+ * @param status
+ * @param bd_addr
+ * @param con_handle
+ * @param incoming
+ */
+#define MAP_SUBEVENT_CONNECTION_OPENED                                    0x01
+
+/**
+ * @format 12
+ * @param subevent_code
+ * @param goep_cid
+*/
+#define MAP_SUBEVENT_CONNECTION_CLOSED                                    0x02
+
+/**
+ * @format 121
+ * @param subevent_code
+ * @param goep_cid
+ * @param status
+ */
+#define MAP_SUBEVENT_OPERATION_COMPLETED                                  0x03
 #endif

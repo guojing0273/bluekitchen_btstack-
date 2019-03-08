@@ -20,7 +20,9 @@ meta_events = [
     'HIDS',
     'HSP',
     'LE',
-    'PBAP'
+    'PBAP',
+    'BIP',
+    'MAP'
 ]
 
 supported_event_groups = meta_events + [
