@@ -50,6 +50,7 @@
 #include "btstack_chipset.h"
 #include "btstack_control.h"
 #include "btstack_linked_list.h"
+#include "btstack_sco_i2s.h"
 #include "btstack_util.h"
 #include "classic/btstack_link_key_db.h"
 #include "hci_cmd.h"
@@ -713,6 +714,11 @@ typedef struct {
     /* link key db */
     const btstack_link_key_db_t * link_key_db;
 
+#ifdef ENABLE_CLASSIC
+    // SCO I2S interface
+    const btstack_sco_i2s_t * sco_i2s;
+#endif
+    
     // list of existing baseband connections
     btstack_linked_list_t     connections;
 
@@ -956,6 +962,11 @@ uint16_t hci_get_sco_voice_setting(void);
  * @param inquriy_mode see bluetooth_defines.h
  */
 void hci_set_inquiry_mode(inquiry_mode_t mode);
+
+/**
+ * @brief Set SCO I2S driver.
+ */
+void hci_set_sco_i2s(const btstack_sco_i2s_t *sco_i2s_driver);
 
 /**
  * @brief Requests the change of BTstack power mode.

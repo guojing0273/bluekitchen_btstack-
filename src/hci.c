@@ -5031,12 +5031,15 @@ void hci_set_master_slave_policy(uint8_t policy){
     hci_stack->master_slave_policy = policy;
 }
 
+void hci_set_sco_i2s(const btstack_sco_i2s_t *sco_i2s_driver){
+    hci_stack->sco_i2s = sco_i2s_driver;
+}
+
 #endif
 
 HCI_STATE hci_get_state(void){
     return hci_stack->state;
 }
-
 
 /**
  * @brief Set callback for Bluetooth Hardware Error
