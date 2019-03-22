@@ -108,52 +108,81 @@ static const uint8_t hci_route_sco_over_hci[] = {
     // route SCO over HCI (connection type=1, tx buffer size = 120, tx buffer max latency= 720, accept packets with CRC Error
     0x10, 0xfe, 0x05, 0x01, 0x78, 0xd0, 0x02, 0x01,
 #else
-    // Configure SCO via I2S interface - 256 kbps
+
+    // Configure SCO for PCM
+
     // Send_HCI_VS_Write_CODEC_Config 0xFD06,
     0x06, 0xfd, 
-    // len
+    // command len
     34,
-    //3072, - clock rate 3072000 hz
-    0x00, 0x01, 
-    // 0x00 - clock direction: output = master
+
+    // clock rate in kHz: 512 kHz
+    0x00, 0x02, 
+
+    // clock direction:
+    // 0x00: output / master
+    // 0x01: input  / slave
     0x00,
-    // 8000, framesync frequency in hz
+
+    // framesync frequency in hz: 8 kHz (0x1f40)
     0x40, 0x1f, 0x00, 0x00,
-    // 0x0001, framesync duty cycle
+
+    // frameseync duty cycle:
+    // 0x0000: 50% (I2S)
+    // 0x0001: Short Frame Sync (PCM)
     0x01, 0x00,
-    // 1, framesync edge
-    1,
-    // 0x00, framesync polarity
+
+    // framesync edge:
+    // 0x00: Driven/sampled at rising edge of the PCM clock
+    // 0x01: Driven/sampled at falling edge of the PCM clock
+    0,
+
+    // framesync polarity:
+    // 0x00 = Active high
+    // 0x01 = Active low
     0x00,
+
     // 0x00, RESERVED
     0x00,
-    // 16, channel 1 out size
-    8, 0,
-    // 0x0001, channel 1 out offset
-    0x01, 0x00,
-    // 1, channel 1 out edge
-    1,
-    // 16,  channel 1 in size
-    8, 0,
-    // 0x0001, channel 1 in offset
-    0x01, 0x00,
-    // 0, channel 1 in edge
+
+    // channel 1 out size: 16 bit (both for mSBC as well as CVSD)
+    16, 0,
+
+    // channel 1 out offset: 1 bit (ie. start right after frame sync)
+    1, 0x00,
+
+    // channel 1 out edge:
+    // 0 = data driven at raising edge
+    // 1 = data driven at falling edge
     0,
-    // 0x00,  RESERVED
+
+    // 16,  channel 1 in size
+    16, 0,
+
+    // 0x0001, channel 1 in offset
+    1, 0x00,
+
+    // channel 1 in edge:
+    // 0 = data sampled at raising edge
+    // 1 = data sampled at falling edge
+    1,
+
+    // Fsynch Multiplier (only for CC256XB and later), 0 for default
     0x00,
+
     // 16, channel 2 out size
-    8, 0,
+    0, 0,
     // 17, channel 2 out offset
-    9, 0,
+    0, 0,
     // 0x01, channel 2 out edge
     0x01,
     // 16,  channel 2 in size
-    8, 0,
+    0, 0,
     // 17,  channel 2 in offset
-    9, 0,
+    0, 0,
     // 0x00, channel 2 in edge
     0x00,
-    // 0x0001, RESERVED
+    // 0x0000, RESERVED
     0x00
 #endif
 };
