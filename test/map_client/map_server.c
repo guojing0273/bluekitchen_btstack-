@@ -60,10 +60,15 @@
 #include "classic/obex.h"
 #include "classic/obex_iterator.h"
 #include "classic/goep_client.h"
+#include "goep_server.h"
 #include "map_server.h"
 
 #define MAP_MAX_NUM_ENTRIES 1024
 
+static const uint8_t map_client_notification_service_uuid[] = {0xbb, 0x58, 0x2b, 0x41, 0x42, 0xc, 0x11, 0xdb, 0xb0, 0xde, 0x8, 0x0, 0x20, 0xc, 0x9a, 0x66};
+static int rfcomm_channel_nr = 1;
+// static bd_addr_t    remote_addr;
+static uint16_t rfcomm_channel_id;   
 // map access service bb582b40-420c-11db-b0de-0800200c9a66
 
 typedef enum {
@@ -84,7 +89,7 @@ static map_server_t _map_server;
 static map_server_t * map_server = &_map_server;
 
 static void map_create_sdp_record(uint8_t * service, uint32_t service_record_handle, uint16_t service_uuid, uint8_t instance_id,
-    int rfcomm_channel_nr, uint16_t goep_l2cap_psm, map_message_type_t supported_message_types, uint32_t supported_features, const char * name){
+    int channel_nr, uint16_t goep_l2cap_psm, map_message_type_t supported_message_types, uint32_t supported_features, const char * name){
     UNUSED(goep_l2cap_psm);
     uint8_t* attribute;
     de_create_sequence(service);
@@ -115,7 +120,7 @@ static void map_create_sdp_record(uint8_t * service, uint32_t service_record_han
         uint8_t* rfcomm = de_push_sequence(attribute);
         {
             de_add_number(rfcomm,  DE_UUID, DE_SIZE_16, BLUETOOTH_PROTOCOL_RFCOMM);  // rfcomm_service
-            de_add_number(rfcomm,  DE_UINT, DE_SIZE_8,  rfcomm_channel_nr);  // rfcomm channel
+            de_add_number(rfcomm,  DE_UINT, DE_SIZE_8,  channel_nr);  // rfcomm channel
         }
         de_pop_sequence(attribute, rfcomm);
 
@@ -174,31 +179,91 @@ static void map_create_sdp_record(uint8_t * service, uint32_t service_record_han
 }
 
 void map_message_access_service_create_sdp_record(uint8_t * service, uint32_t service_record_handle, uint8_t instance_id,
-    int rfcomm_channel_nr, uint16_t goep_l2cap_psm, map_message_type_t supported_message_types, uint32_t supported_features, const char * name){
-    map_create_sdp_record(service, service_record_handle, BLUETOOTH_SERVICE_CLASS_MESSAGE_ACCESS_SERVER, instance_id, rfcomm_channel_nr,
+    int channel_nr, uint16_t goep_l2cap_psm, map_message_type_t supported_message_types, uint32_t supported_features, const char * name){
+    map_create_sdp_record(service, service_record_handle, BLUETOOTH_SERVICE_CLASS_MESSAGE_ACCESS_SERVER, instance_id, channel_nr,
         goep_l2cap_psm, supported_message_types, supported_features, name);
 }
 
 void map_message_notification_service_create_sdp_record(uint8_t * service, uint32_t service_record_handle, uint8_t instance_id,
-    int rfcomm_channel_nr, uint16_t goep_l2cap_psm, map_message_type_t supported_message_types, uint32_t supported_features, const char * name){
-    map_create_sdp_record(service, service_record_handle, BLUETOOTH_SERVICE_CLASS_MESSAGE_NOTIFICATION_SERVER, instance_id, rfcomm_channel_nr,
+    int channel_nr, uint16_t goep_l2cap_psm, map_message_type_t supported_message_types, uint32_t supported_features, const char * name){
+    map_create_sdp_record(service, service_record_handle, BLUETOOTH_SERVICE_CLASS_MESSAGE_NOTIFICATION_SERVER, instance_id, channel_nr,
         goep_l2cap_psm, supported_message_types, supported_features, name);
 }
 
-#if 0
-static void map_handle_can_send_now(void){
+static void obex_server_success_response(uint16_t rfcomm_cid){
+    uint8_t event[30];
+    int pos = 0;
+    event[pos++] = OBEX_RESP_SUCCESS;
+    // store len
+    pos += 2;
+    // obex version num
+    event[pos++] = OBEX_VERSION;
+    // flags
+    // Bit 0 should be used by the receiving client to decide how to multiplex operations 
+    // to the server (should it desire to do so). If the bit is 0 the client should serialize 
+    // the operations over a single TTP connection. If the bit is set the client is free to 
+    // establish multiple TTP connections to the server and concurrently exchange its objects.
+    event[pos++] = 0;
+    
+    // Maximum OBEX packet length
+    big_endian_store_16(event, pos, 0x0400);
+    pos += 2;
+    
+    event[pos++] = OBEX_HEADER_CONNECTION_ID;
+    big_endian_store_32(event, pos, 0x1234); 
+    pos += 4;
+
+    event[pos++] = OBEX_HEADER_WHO;
+    big_endian_store_16(event, pos, 16 + 3);
+    pos += 2;
+    memcpy(event+pos, map_client_notification_service_uuid, 16);
+    pos += 16;
+
+    big_endian_store_16(event, 1, pos);
+    rfcomm_send(rfcomm_cid, event, pos);
 }
 
 static void map_packet_handler(uint8_t packet_type, uint16_t channel, uint8_t *packet, uint16_t size){
     UNUSED(channel); 
     UNUSED(size);    
-    printf("packet_type 0x%02x, event type 0x%02x, subevent 0x%02x\n", packet_type, hci_event_packet_get_type(packet), hci_event_goep_meta_get_subevent_code(packet));
-}
+    printf("map_packet_handler: packet_type 0x%02x, event type 0x%02x, subevent 0x%02x\n", packet_type, hci_event_packet_get_type(packet), hci_event_goep_meta_get_subevent_code(packet));
+    int i;
+    switch (packet_type){
+        case HCI_EVENT_PACKET:
+            switch (hci_event_packet_get_type(packet)) {
+                case HCI_EVENT_GOEP_META:
+                    switch (hci_event_goep_meta_get_subevent_code(packet)){
+                        case GOEP_SUBEVENT_CONNECTION_OPENED:
+                            printf("connection opened\n");
+                            break;
+                        case GOEP_SUBEVENT_CONNECTION_CLOSED:
+                            printf("connection closed\n");
+                            break;
+                        default:
+                            break;
+                    }
+                default:
+                    break;
+            }
+            break;
+        case RFCOMM_DATA_PACKET:
+            printf("MAP server - RFCOMM data packet: '");
+            for (i=0;i<size;i++){
+                printf("%02x ", packet[i]);
+            }
+            printf("'\n"); 
+            obex_server_success_response(rfcomm_channel_id);
+            break;
 
-#endif
+        default:
+            break;
+    }
+}
 
 void map_server_init(void){
     memset(map_server, 0, sizeof(map_server_t));
     map_server->state = MAP_INIT;
     map_server->cid = 1;
+
+    goep_server_register_service(&map_packet_handler, rfcomm_channel_nr, 0xFFFF, 0, 0xFFFF, LEVEL_0);
 }
