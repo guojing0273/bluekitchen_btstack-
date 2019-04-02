@@ -58,15 +58,16 @@ extern "C" {
 #include "l2cap.h"
 
 // Classic
-#include "classic/bnep.h"
-#include "classic/hfp.h"
-#include "classic/btstack_link_key_db.h"
-#include "classic/btstack_link_key_db_memory.h"
-#include "classic/rfcomm.h"
-#include "classic/sdp_server.h"
 #include "classic/avdtp_sink.h"
 #include "classic/avdtp_source.h"
 #include "classic/avrcp.h"
+#include "classic/bnep.h"
+#include "classic/btstack_link_key_db.h"
+#include "classic/btstack_link_key_db_memory.h"
+#include "classic/goep_server.h"
+#include "classic/hfp.h"
+#include "classic/rfcomm.h"
+#include "classic/sdp_server.h"
 
 // BLE
 #ifdef ENABLE_BLE
@@ -134,6 +135,14 @@ void   btstack_memory_avrcp_connection_free(avrcp_connection_t *avrcp_connection
 // avrcp_browsing_connection
 avrcp_browsing_connection_t * btstack_memory_avrcp_browsing_connection_get(void);
 void   btstack_memory_avrcp_browsing_connection_free(avrcp_browsing_connection_t *avrcp_browsing_connection);
+
+// goep_server_service
+goep_server_service_t * btstack_memory_goep_server_service_get(void);
+void   btstack_memory_goep_server_service_free(goep_server_service_t *goep_server_service);
+
+// goep_server_connection
+goep_server_connection_t * btstack_memory_goep_server_connection_get(void);
+void   btstack_memory_goep_server_connection_free(goep_server_connection_t *goep_server_connection);
 
 #ifdef ENABLE_BLE
 // gatt_client, whitelist_entry, sm_lookup_entry

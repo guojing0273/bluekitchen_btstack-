@@ -64,15 +64,16 @@ extern "C" {
 #include "l2cap.h"
 
 // Classic
-#include "classic/bnep.h"
-#include "classic/hfp.h"
-#include "classic/btstack_link_key_db.h"
-#include "classic/btstack_link_key_db_memory.h"
-#include "classic/rfcomm.h"
-#include "classic/sdp_server.h"
 #include "classic/avdtp_sink.h"
 #include "classic/avdtp_source.h"
 #include "classic/avrcp.h"
+#include "classic/bnep.h"
+#include "classic/btstack_link_key_db.h"
+#include "classic/btstack_link_key_db_memory.h"
+#include "classic/goep_server.h"
+#include "classic/hfp.h"
+#include "classic/rfcomm.h"
+#include "classic/sdp_server.h"
 
 // BLE
 #ifdef ENABLE_BLE
@@ -194,7 +195,8 @@ list_of_structs = [
     ["avdtp_stream_endpoint"],
     ["avdtp_connection"],
     ["avrcp_connection"],
-    ["avrcp_browsing_connection"]    
+    ["avrcp_browsing_connection"],
+    ["goep_server_service"], ["goep_server_connection"] 
 ]
 
 list_of_le_structs = [["gatt_client", "whitelist_entry", "sm_lookup_entry"]]

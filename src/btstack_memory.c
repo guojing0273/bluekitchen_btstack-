@@ -753,6 +753,100 @@ void btstack_memory_avrcp_browsing_connection_free(avrcp_browsing_connection_t *
 #endif
 
 
+
+// MARK: goep_server_service_t
+#if !defined(HAVE_MALLOC) && !defined(MAX_NR_GOEP_SERVER_SERVICES)
+    #if defined(MAX_NO_GOEP_SERVER_SERVICES)
+        #error "Deprecated MAX_NO_GOEP_SERVER_SERVICES defined instead of MAX_NR_GOEP_SERVER_SERVICES. Please update your btstack_config.h to use MAX_NR_GOEP_SERVER_SERVICES."
+    #else
+        #define MAX_NR_GOEP_SERVER_SERVICES 0
+    #endif
+#endif
+
+#ifdef MAX_NR_GOEP_SERVER_SERVICES
+#if MAX_NR_GOEP_SERVER_SERVICES > 0
+static goep_server_service_t goep_server_service_storage[MAX_NR_GOEP_SERVER_SERVICES];
+static btstack_memory_pool_t goep_server_service_pool;
+goep_server_service_t * btstack_memory_goep_server_service_get(void){
+    void * buffer = btstack_memory_pool_get(&goep_server_service_pool);
+    if (buffer){
+        memset(buffer, 0, sizeof(goep_server_service_t));
+    }
+    return (goep_server_service_t *) buffer;
+}
+void btstack_memory_goep_server_service_free(goep_server_service_t *goep_server_service){
+    btstack_memory_pool_free(&goep_server_service_pool, goep_server_service);
+}
+#else
+goep_server_service_t * btstack_memory_goep_server_service_get(void){
+    return NULL;
+}
+void btstack_memory_goep_server_service_free(goep_server_service_t *goep_server_service){
+    // silence compiler warning about unused parameter in a portable way
+    (void) goep_server_service;
+};
+#endif
+#elif defined(HAVE_MALLOC)
+goep_server_service_t * btstack_memory_goep_server_service_get(void){
+    void * buffer = malloc(sizeof(goep_server_service_t));
+    if (buffer){
+        memset(buffer, 0, sizeof(goep_server_service_t));
+    }
+    return (goep_server_service_t *) buffer;
+}
+void btstack_memory_goep_server_service_free(goep_server_service_t *goep_server_service){
+    free(goep_server_service);
+}
+#endif
+
+
+
+// MARK: goep_server_connection_t
+#if !defined(HAVE_MALLOC) && !defined(MAX_NR_GOEP_SERVER_CONNECTIONS)
+    #if defined(MAX_NO_GOEP_SERVER_CONNECTIONS)
+        #error "Deprecated MAX_NO_GOEP_SERVER_CONNECTIONS defined instead of MAX_NR_GOEP_SERVER_CONNECTIONS. Please update your btstack_config.h to use MAX_NR_GOEP_SERVER_CONNECTIONS."
+    #else
+        #define MAX_NR_GOEP_SERVER_CONNECTIONS 0
+    #endif
+#endif
+
+#ifdef MAX_NR_GOEP_SERVER_CONNECTIONS
+#if MAX_NR_GOEP_SERVER_CONNECTIONS > 0
+static goep_server_connection_t goep_server_connection_storage[MAX_NR_GOEP_SERVER_CONNECTIONS];
+static btstack_memory_pool_t goep_server_connection_pool;
+goep_server_connection_t * btstack_memory_goep_server_connection_get(void){
+    void * buffer = btstack_memory_pool_get(&goep_server_connection_pool);
+    if (buffer){
+        memset(buffer, 0, sizeof(goep_server_connection_t));
+    }
+    return (goep_server_connection_t *) buffer;
+}
+void btstack_memory_goep_server_connection_free(goep_server_connection_t *goep_server_connection){
+    btstack_memory_pool_free(&goep_server_connection_pool, goep_server_connection);
+}
+#else
+goep_server_connection_t * btstack_memory_goep_server_connection_get(void){
+    return NULL;
+}
+void btstack_memory_goep_server_connection_free(goep_server_connection_t *goep_server_connection){
+    // silence compiler warning about unused parameter in a portable way
+    (void) goep_server_connection;
+};
+#endif
+#elif defined(HAVE_MALLOC)
+goep_server_connection_t * btstack_memory_goep_server_connection_get(void){
+    void * buffer = malloc(sizeof(goep_server_connection_t));
+    if (buffer){
+        memset(buffer, 0, sizeof(goep_server_connection_t));
+    }
+    return (goep_server_connection_t *) buffer;
+}
+void btstack_memory_goep_server_connection_free(goep_server_connection_t *goep_server_connection){
+    free(goep_server_connection);
+}
+#endif
+
+
 #ifdef ENABLE_BLE
 
 // MARK: gatt_client_t
@@ -940,6 +1034,12 @@ void btstack_memory_init(void){
 #endif
 #if MAX_NR_AVRCP_BROWSING_CONNECTIONS > 0
     btstack_memory_pool_create(&avrcp_browsing_connection_pool, avrcp_browsing_connection_storage, MAX_NR_AVRCP_BROWSING_CONNECTIONS, sizeof(avrcp_browsing_connection_t));
+#endif
+#if MAX_NR_GOEP_SERVER_SERVICES > 0
+    btstack_memory_pool_create(&goep_server_service_pool, goep_server_service_storage, MAX_NR_GOEP_SERVER_SERVICES, sizeof(goep_server_service_t));
+#endif
+#if MAX_NR_GOEP_SERVER_CONNECTIONS > 0
+    btstack_memory_pool_create(&goep_server_connection_pool, goep_server_connection_storage, MAX_NR_GOEP_SERVER_CONNECTIONS, sizeof(goep_server_connection_t));
 #endif
 #ifdef ENABLE_BLE
 #if MAX_NR_GATT_CLIENTS > 0
