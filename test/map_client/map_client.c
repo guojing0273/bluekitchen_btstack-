@@ -286,7 +286,7 @@ static void map_handle_can_send_now(void){
 
             goep_client_header_add_application_parameters(map_client->goep_cid, &application_parameters[0], pos);
             goep_client_body_add_static(map_client->goep_cid, (uint8_t *) "0", 1);
-            map_client->state = MAP_W4_MESSAGE;
+            map_client->state = MAP_W4_SET_NOTIFICATION;
             goep_client_execute(map_client->goep_cid);
             break;
         default:
@@ -440,6 +440,10 @@ static void map_packet_handler(uint8_t packet_type, uint16_t channel, uint8_t *p
                         }
                     }
                     printf("\n");
+                    break;
+                case MAP_W4_SET_NOTIFICATION:
+                    map_client->state = MAP_CONNECTED;
+                    printf("Notification set\n");
                     break;
                 default:
                     break;
