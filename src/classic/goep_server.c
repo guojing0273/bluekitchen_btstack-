@@ -179,78 +179,88 @@ static void goep_server_packet_handler_rfcomm(uint8_t packet_type, uint16_t chan
     
     log_debug("GOEP server packet_handler type %u, event type %x, size %u", packet_type, hci_event_packet_get_type(packet), size);
     
-    switch (hci_event_packet_get_type(packet)) {
+    switch (packet_type){
+        case HCI_EVENT_PACKET:
+            switch (hci_event_packet_get_type(packet)) {
+                case RFCOMM_EVENT_INCOMING_CONNECTION:
+                    // data: event (8), len(8), address(48), channel (8), rfcomm_cid (16)
+                    rfcomm_channel = rfcomm_event_incoming_connection_get_server_channel(packet); 
+                    rfcomm_cid = rfcomm_event_incoming_connection_get_rfcomm_cid(packet);
 
-        case RFCOMM_EVENT_INCOMING_CONNECTION:
-            // data: event (8), len(8), address(48), channel (8), rfcomm_cid (16)
-            rfcomm_channel = rfcomm_event_incoming_connection_get_server_channel(packet); 
-            rfcomm_cid = rfcomm_event_incoming_connection_get_rfcomm_cid(packet);
+                    goep_service = goep_server_get_service_for_rfcomm_channel(rfcomm_channel);
+                    if (!goep_service){
+                        // reject
+                        log_info("goep: no service for rfcomm channel 0x%02x - decline", rfcomm_channel);
+                        rfcomm_decline_connection(rfcomm_cid);
+                        return;
+                    }
+                    
+                    // alloc structure
+                    goep_connection = btstack_memory_goep_server_connection_get();
+                    if (!goep_connection){
+                        log_info("goep: no memory to create goep connection - decline");
+                        rfcomm_decline_connection(rfcomm_cid);
+                        return;   
+                    }
+                    // printf("Accept incoming connection for RFCOMM Channel ID 0x%02X\n", rfcomm_cid);
+                    goep_connection->bearer_cid = rfcomm_cid;
+                    goep_connection->service = goep_service;
+                    goep_connection->type = GOEP_RFCOMM_CONNECTION;
+                    goep_connection->state = GOEP_SERVER_W4_RFCOMM_CONNECTED;
+                    btstack_linked_list_add(&goep_server_connections, (btstack_linked_item_t *) goep_connection);
+                    rfcomm_accept_connection(rfcomm_cid);
+                    break;
 
-            goep_service = goep_server_get_service_for_rfcomm_channel(rfcomm_channel);
-            if (!goep_service){
-                // reject
-                log_info("goep: no service for rfcomm channel 0x%02x - decline", rfcomm_channel);
-                rfcomm_decline_connection(rfcomm_cid);
-                return;
+                case RFCOMM_EVENT_CHANNEL_OPENED:
+                    // data: event(8), len(8), status (8), address (48), handle(16), server channel(8), rfcomm_cid(16), max frame size(16)
+                    rfcomm_cid = rfcomm_event_channel_opened_get_rfcomm_cid(packet); 
+                    goep_connection = goep_server_get_connection_for_rfcomm_cid(rfcomm_cid);
+
+                    if (!goep_connection){
+                        log_info("RFCOMM channel open failed. No connection for RFCOMM Channel IDRFCOMM Channel ID  0x%02x", rfcomm_cid);
+                        return;
+                    }
+                    if (goep_connection->state != GOEP_SERVER_W4_RFCOMM_CONNECTED) {
+                        log_info("RFCOMM channel open failed. Connection in wrong state %d", goep_connection->state);
+                        return;
+                    }
+
+                    status = rfcomm_event_channel_opened_get_status(packet);          
+                    if (status != ERROR_CODE_SUCCESS) {
+                        printf("RFCOMM channel open failed. RFCOMM Channel ID 0x%02x, status 0x%02x\n", rfcomm_cid, status);
+                        btstack_linked_list_remove(&goep_server_connections, (btstack_linked_item_t *) goep_connection);
+                        btstack_memory_goep_server_connection_free(goep_connection);
+                        return;
+                    }
+
+                    goep_connection->goep_cid = goep_server_get_next_goep_cid();
+                    goep_connection->state = GOEP_SERVER_RFCOMM_CONNECTED;
+                    log_info("RFCOMM channel open succeeded. GOEP Connection %p, RFCOMM Channel ID 0x%02x, GOEP CID 0x%02x", goep_connection, rfcomm_cid, goep_connection->goep_cid);
+                    
+                    rfcomm_event_channel_opened_get_bd_addr(event_addr, packet);
+                    goep_server_emit_connection_opened_event(goep_connection, event_addr, rfcomm_event_channel_opened_get_con_handle(packet));
+                    break;
+
+                case RFCOMM_EVENT_CHANNEL_CLOSED:
+                    rfcomm_cid = little_endian_read_16(packet,2);
+                    goep_connection = goep_server_get_connection_for_rfcomm_cid(rfcomm_cid);
+                    if (!goep_connection) break;
+
+                    log_info("RFCOMM channel closed. RFCOMM Channel ID 0x%02x, GOEP CID 0x%02x", rfcomm_cid, goep_connection->goep_cid);
+                    goep_server_emit_connection_closed_event(goep_connection);
+                    btstack_linked_list_remove(&goep_server_connections, (btstack_linked_item_t *) goep_connection);
+                    btstack_memory_goep_server_connection_free(goep_connection);
+                    break;
+                 default:
+                    break;
             }
-            
-            // alloc structure
-            goep_connection = btstack_memory_goep_server_connection_get();
-            if (!goep_connection){
-                log_info("goep: no memory to create goep connection - decline");
-                rfcomm_decline_connection(rfcomm_cid);
-                return;   
-            }
-            // printf("Accept incoming connection for RFCOMM Channel ID 0x%02X\n", rfcomm_cid);
-            goep_connection->bearer_cid = rfcomm_cid;
-            goep_connection->service = goep_service;
-            goep_connection->type = GOEP_RFCOMM_CONNECTION;
-            goep_connection->state = GOEP_SERVER_W4_RFCOMM_CONNECTED;
-            btstack_linked_list_add(&goep_server_connections, (btstack_linked_item_t *) goep_connection);
-            rfcomm_accept_connection(rfcomm_cid);
+            break;
+        case RFCOMM_DATA_PACKET:
+            goep_connection = goep_server_get_connection_for_rfcomm_cid(channel);
+            if (!goep_connection || !goep_connection->service || !goep_connection->service->callback) break;
+            goep_connection->service->callback(GOEP_DATA_PACKET, goep_connection->goep_cid, packet, size);
             break;
 
-        case RFCOMM_EVENT_CHANNEL_OPENED:
-            // data: event(8), len(8), status (8), address (48), handle(16), server channel(8), rfcomm_cid(16), max frame size(16)
-            rfcomm_cid = rfcomm_event_channel_opened_get_rfcomm_cid(packet); 
-            goep_connection = goep_server_get_connection_for_rfcomm_cid(rfcomm_cid);
-
-            if (!goep_connection){
-                log_info("RFCOMM channel open failed. No connection for RFCOMM Channel IDRFCOMM Channel ID  0x%02x", rfcomm_cid);
-                return;
-            }
-            if (goep_connection->state != GOEP_SERVER_W4_RFCOMM_CONNECTED) {
-                log_info("RFCOMM channel open failed. Connection in wrong state %d", goep_connection->state);
-                return;
-            }
-
-            status = rfcomm_event_channel_opened_get_status(packet);          
-            if (status != ERROR_CODE_SUCCESS) {
-                printf("RFCOMM channel open failed. RFCOMM Channel ID 0x%02x, status 0x%02x\n", rfcomm_cid, status);
-                btstack_linked_list_remove(&goep_server_connections, (btstack_linked_item_t *) goep_connection);
-                btstack_memory_goep_server_connection_free(goep_connection);
-                return;
-            }
-
-            goep_connection->goep_cid = goep_server_get_next_goep_cid();
-            goep_connection->state = GOEP_SERVER_RFCOMM_CONNECTED;
-            log_info("RFCOMM channel open succeeded. GOEP Connection %p, RFCOMM Channel ID 0x%02x, GOEP CID 0x%02x", goep_connection, rfcomm_cid, goep_connection->goep_cid);
-            
-            rfcomm_event_channel_opened_get_bd_addr(event_addr, packet);
-            goep_server_emit_connection_opened_event(goep_connection, event_addr, rfcomm_event_channel_opened_get_con_handle(packet));
-            break;
-
-        case RFCOMM_EVENT_CHANNEL_CLOSED:
-            rfcomm_cid = little_endian_read_16(packet,2);
-            goep_connection = goep_server_get_connection_for_rfcomm_cid(rfcomm_cid);
-            if (!goep_connection) break;
-
-            log_info("RFCOMM channel closed. RFCOMM Channel ID 0x%02x, GOEP CID 0x%02x", rfcomm_cid, goep_connection->goep_cid);
-            goep_server_emit_connection_closed_event(goep_connection);
-            btstack_linked_list_remove(&goep_server_connections, (btstack_linked_item_t *) goep_connection);
-            btstack_memory_goep_server_connection_free(goep_connection);
-            break;
-        
         default:
             break;
     }

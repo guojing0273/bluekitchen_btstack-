@@ -47,7 +47,7 @@ extern "C" {
 
 /* API_START */
 
-typedef struct {
+typedef enum {
     GOEP_SERVER_IDLE,
     GOEP_SERVER_W4_RFCOMM_CONNECTED,
     GOEP_SERVER_RFCOMM_CONNECTED
