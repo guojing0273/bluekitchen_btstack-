@@ -192,35 +192,9 @@ void map_message_notification_service_create_sdp_record(uint8_t * service, uint3
 
 static void obex_server_success_response(uint16_t rfcomm_cid){
     uint8_t event[30];
-    int pos = 0;
-    event[pos++] = OBEX_RESP_SUCCESS;
-    // store len
-    pos += 2;
-    // obex version num
-    event[pos++] = OBEX_VERSION;
-    // flags
-    // Bit 0 should be used by the receiving client to decide how to multiplex operations 
-    // to the server (should it desire to do so). If the bit is 0 the client should serialize 
-    // the operations over a single TTP connection. If the bit is set the client is free to 
-    // establish multiple TTP connections to the server and concurrently exchange its objects.
-    event[pos++] = 0;
-    
-    // Maximum OBEX packet length
-    big_endian_store_16(event, pos, 0x0400);
-    pos += 2;
-    
-    event[pos++] = OBEX_HEADER_CONNECTION_ID;
-    big_endian_store_32(event, pos, 0x1234); 
-    pos += 4;
-
-    event[pos++] = OBEX_HEADER_WHO;
-    big_endian_store_16(event, pos, 16 + 3);
-    pos += 2;
-    memcpy(event+pos, map_client_notification_service_uuid, 16);
-    pos += 16;
-
-    big_endian_store_16(event, 1, pos);
-    rfcomm_send(rfcomm_cid, event, pos);
+    obex_message_builder_response_create_connect(event, sizeof(event), OBEX_VERSION, 0, 0x0400, 0x1234);
+    obex_message_builder_header_add_who(event, sizeof(event), map_client_notification_service_uuid);
+    rfcomm_send(rfcomm_cid, event, obex_message_builder_get_message_length(event));
 }
 
 static void map_packet_handler(uint8_t packet_type, uint16_t channel, uint8_t *packet, uint16_t size){
@@ -246,8 +220,8 @@ static void map_packet_handler(uint8_t packet_type, uint16_t channel, uint8_t *p
                     break;
             }
             break;
-        case RFCOMM_DATA_PACKET:
-            printf("MAP server - RFCOMM data packet: '");
+        case GOEP_DATA_PACKET:
+            printf("MAP server - GOEP data packet: '");
             for (i=0;i<size;i++){
                 printf("%02x ", packet[i]);
             }
