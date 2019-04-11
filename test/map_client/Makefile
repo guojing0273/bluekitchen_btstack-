@@ -36,7 +36,7 @@ MAP = \
 	hci_dump.c \
 	map_util.c \
 	map_client.c \
-	map_server.c \
+	map_notification_server.c \
 	goep_server.c \
     
 MAP_OBJ = $(MAP:.c=.o)

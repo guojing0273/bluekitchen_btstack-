@@ -162,6 +162,40 @@ void map_create_sdp_record(uint8_t * service, uint32_t service_record_handle, ui
     de_add_number(service, DE_UINT, DE_SIZE_32, supported_features);
 }
 
+void map_emit_connected_event(map_connection_t * context, uint8_t status){
+    uint8_t event[16];
+    int pos = 0;
+    event[pos++] = HCI_EVENT_MAP_META;
+    pos++;  // skip len
+    event[pos++] = MAP_SUBEVENT_CONNECTION_OPENED;
+    little_endian_store_16(event,pos,context->cid);
+    pos+=2;
+    event[pos++] = status;
+    memcpy(&event[pos], context->bd_addr, 6);
+    pos += 6;
+    little_endian_store_16(event,pos,context->con_handle);
+    pos += 2;
+    event[pos++] = 1;
+    event[pos++] = context->role;
+    event[1] = pos - 2;
+    if (pos != sizeof(event)) log_error("map_emit_connected_event size %u", pos);
+    context->callback(HCI_EVENT_PACKET, context->cid, &event[0], pos);
+}  
+
+void map_emit_connection_closed_event(map_connection_t * context){
+    uint8_t event[6];
+    int pos = 0;
+    event[pos++] = HCI_EVENT_MAP_META;
+    pos++;  // skip len
+    event[pos++] = MAP_SUBEVENT_CONNECTION_CLOSED;
+    little_endian_store_16(event,pos,context->cid);
+    pos+=2;
+    event[pos++] = context->role;
+    event[1] = pos - 2;
+    if (pos != sizeof(event)) log_error("map_emit_connection_closed_event size %u", pos);
+    context->callback(HCI_EVENT_PACKET, context->cid, &event[0], pos);
+}   
+
 void map_message_str_to_handle(const char * value, map_message_handle_t msg_handle){
     int i;
     for (i = 0; i < MAP_MESSAGE_HANDLE_SIZE; i++) {

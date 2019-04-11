@@ -68,6 +68,9 @@ void map_create_sdp_record(uint8_t * service, uint32_t service_record_handle, ui
  */
 const char * map_role2str(map_role_t map_role);
 
+void map_emit_connected_event(map_connection_t * context, uint8_t status);
+
+void map_emit_connection_closed_event(map_connection_t * context);
 /* API_END */
 
 // only for testing

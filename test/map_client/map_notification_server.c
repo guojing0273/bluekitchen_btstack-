@@ -81,11 +81,7 @@ typedef enum {
 
 typedef struct map_server {
     map_state_t state;
-    uint16_t  cid;
-    bd_addr_t bd_addr;
-    hci_con_handle_t con_handle;
-    uint16_t  goep_cid;
-    btstack_packet_handler_t callback;
+    map_connection_t connection;
 
     uint16_t maximum_obex_packet_length;
     uint8_t  flags;
@@ -101,7 +97,7 @@ void map_notification_server_register_packet_handler(btstack_packet_handler_t ca
         log_error("map_server_register_packet_handler called with NULL callback");
         return;
     }
-    map_server->callback = callback;
+    map_server->connection.callback = callback;
 }
 
 void map_notification_server_create_sdp_record(uint8_t * service, uint32_t service_record_handle, uint8_t instance_id,
@@ -109,40 +105,6 @@ void map_notification_server_create_sdp_record(uint8_t * service, uint32_t servi
     map_create_sdp_record(service, service_record_handle, BLUETOOTH_SERVICE_CLASS_MESSAGE_NOTIFICATION_SERVER, instance_id, channel_nr,
         goep_l2cap_psm, supported_message_types, supported_features, name);
 }
-
-static void map_server_emit_connected_event(map_server_t * context, uint8_t status){
-    uint8_t event[16];
-    int pos = 0;
-    event[pos++] = HCI_EVENT_MAP_META;
-    pos++;  // skip len
-    event[pos++] = MAP_SUBEVENT_CONNECTION_OPENED;
-    little_endian_store_16(event,pos,context->cid);
-    pos+=2;
-    event[pos++] = status;
-    memcpy(&event[pos], context->bd_addr, 6);
-    pos += 6;
-    little_endian_store_16(event,pos,context->con_handle);
-    pos += 2;
-    event[pos++] = 1;
-    event[pos++] = MAP_MESSAGE_NOTIFICATION_SERVICE;
-    event[1] = pos - 2;
-    if (pos != sizeof(event)) log_error("map_client_emit_connected_event size %u", pos);
-    context->callback(HCI_EVENT_PACKET, context->cid, &event[0], pos);
-}  
-
-static void map_server_emit_connection_closed_event(map_server_t * context){
-    uint8_t event[6];
-    int pos = 0;
-    event[pos++] = HCI_EVENT_MAP_META;
-    pos++;  // skip len
-    event[pos++] = MAP_SUBEVENT_CONNECTION_CLOSED;
-    little_endian_store_16(event,pos,context->cid);
-    pos+=2;
-    event[pos++] = MAP_MESSAGE_NOTIFICATION_SERVICE;
-    event[1] = pos - 2;
-    if (pos != sizeof(event)) log_error("map_client_emit_connection_closed_event size %u", pos);
-    context->callback(HCI_EVENT_PACKET, context->cid, &event[0], pos);
-}   
 
 static void obex_server_success_response(uint16_t rfcomm_cid){
     uint8_t event[30];
@@ -170,24 +132,24 @@ static void map_packet_handler(uint8_t packet_type, uint16_t channel, uint8_t *p
                         case GOEP_SUBEVENT_CONNECTION_OPENED:
                             if (map_server->state != MAP_INIT) return;
                             status = goep_subevent_connection_opened_get_status(packet);
-                            map_server->con_handle = goep_subevent_connection_opened_get_con_handle(packet);
-                            goep_subevent_connection_opened_get_bd_addr(packet, map_server->bd_addr); 
+                            map_server->connection.con_handle = goep_subevent_connection_opened_get_con_handle(packet);
+                            goep_subevent_connection_opened_get_bd_addr(packet, map_server->connection.bd_addr); 
                             if (status){
                                 log_info("MAP notification server: connection failed %u", status);
                                 map_server->state = MAP_INIT;
-                                map_server_emit_connected_event(map_server, status);
+                                map_emit_connected_event(&map_server->connection, status);
                                 break;
                             } 
                             log_info("MAP notification server: connection established");
-                            map_server->goep_cid = goep_subevent_connection_opened_get_goep_cid(packet);
+                            map_server->connection.goep_cid = goep_subevent_connection_opened_get_goep_cid(packet);
                             map_server->state = MAP_CONNECTED;
-                            map_server_emit_connected_event(map_server, status);
+                            map_emit_connected_event(&map_server->connection, status);
                             break;
                         case GOEP_SUBEVENT_CONNECTION_CLOSED:
                             if (map_server->state != MAP_CONNECTED) break;
                             log_info("MAP notification server: connection closed");
                             map_server->state = MAP_INIT;
-                            map_server_emit_connection_closed_event(map_server);
+                            map_emit_connection_closed_event(&map_server->connection);
                             break;
                         case GOEP_SUBEVENT_CAN_SEND_NOW:
                             switch (map_server->state){
@@ -240,7 +202,8 @@ static void map_packet_handler(uint8_t packet_type, uint16_t channel, uint8_t *p
 void map_notification_server_init(uint16_t mtu){
     memset(map_server, 0, sizeof(map_server_t));
     map_server->state = MAP_INIT;
-    map_server->cid = 1;
+    map_server->connection.role = MAP_MESSAGE_NOTIFICATION_SERVICE;
+    map_server->connection.cid = 1;
     maximum_obex_packet_length = mtu;
     goep_server_register_service(&map_packet_handler, rfcomm_channel_nr, 0xFFFF, 0, 0xFFFF, LEVEL_0);
 }
