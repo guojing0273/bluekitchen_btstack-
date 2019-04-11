@@ -80,9 +80,16 @@ void map_message_notification_service_create_sdp_record(uint8_t * service, uint3
     int rfcomm_channel_nr, uint16_t goep_l2cap_psm, map_message_type_t supported_message_types, uint32_t supported_features, const char * name);
 
 /**
- *
+ * @brief Init MAP Server
+ * @param maximum_obex_packet_length
  */
-void map_server_init(void);
+void map_server_init(uint16_t maximum_obex_packet_length);
+
+/**
+ * @brief Register packet handler
+ * @param packet_handler
+ */
+void map_server_register_packet_handler(btstack_packet_handler_t packet_handler);
 
 /* API_END */
 
