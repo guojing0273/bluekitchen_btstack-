@@ -48,15 +48,33 @@ extern "C" {
 
 /* API_START */
 
+/**
+ * @brief Create SDP record for Message Access Service
+ * @param service
+ * @param service_record_handle
+ * @param instance_id
+ * @param rfcomm_channel_nr
+ * @param goep_l2cap_psm
+ * @param supported_message_types
+ * @param supported_features
+ * @param name
+ */
+void map_create_sdp_record(uint8_t * service, uint32_t service_record_handle, uint16_t service_uuid, uint8_t instance_id,
+    int channel_nr, uint16_t goep_l2cap_psm, map_message_type_t supported_message_types, uint32_t supported_features, const char * name);
+
+/**
+ * @brief Returns string representation of map role
+ * @param map_role
+ */
+const char * map_role2str(map_role_t map_role);
+
 /* API_END */
 
 // only for testing
-    
 void map_message_str_to_handle(const char * value, map_message_handle_t msg_handle);
 void map_message_handle_to_str(char * p, const map_message_handle_t msg_handle);
 void map_client_parse_folder_listing(btstack_packet_handler_t callback, uint16_t cid, const uint8_t * data, uint16_t data_len);
 void map_client_parse_message_listing(btstack_packet_handler_t callback, uint16_t cid, const uint8_t * data, uint16_t data_len);
-const char * map_role2str(uint8_t index);
 
 #if defined __cplusplus
 }
