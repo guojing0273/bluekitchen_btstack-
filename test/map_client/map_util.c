@@ -57,6 +57,19 @@
 static yxml_t  xml_parser;
 static uint8_t xml_buffer[50];
 
+static const char * map_role_name[] = {
+    "Client",
+    "Message Access Service",
+    "Message Notification Service"
+};
+
+const char * map_role2str(uint8_t index){
+    if (index < sizeof(map_role_t)){
+        return map_role_name[index];
+    }
+    return "Unknown";
+}
+
 void map_message_str_to_handle(const char * value, map_message_handle_t msg_handle){
     int i;
     for (i = 0; i < MAP_MESSAGE_HANDLE_SIZE; i++) {
@@ -216,3 +229,4 @@ void map_client_parse_message_listing(btstack_packet_handler_t callback, uint16_
     }
     map_client_emit_parsing_done_event(callback, cid);
 }
+

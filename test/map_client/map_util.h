@@ -56,6 +56,7 @@ void map_message_str_to_handle(const char * value, map_message_handle_t msg_hand
 void map_message_handle_to_str(char * p, const map_message_handle_t msg_handle);
 void map_client_parse_folder_listing(btstack_packet_handler_t callback, uint16_t cid, const uint8_t * data, uint16_t data_len);
 void map_client_parse_message_listing(btstack_packet_handler_t callback, uint16_t cid, const uint8_t * data, uint16_t data_len);
+const char * map_role2str(uint8_t index);
 
 #if defined __cplusplus
 }
