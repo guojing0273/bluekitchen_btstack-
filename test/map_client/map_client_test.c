@@ -64,6 +64,7 @@
 #include "classic/obex.h"
 #include "map_client.h"
 #include "map_server.h"
+#include "map_util.h"
 #include "classic/sdp_client.h"
 #include "classic/sdp_util.h"
 #include "classic/sdp_server.h"
@@ -155,6 +156,7 @@ static void packet_handler(uint8_t packet_type, uint16_t channel, uint8_t *packe
     int value_len;
     char value[MAP_MAX_VALUE_LEN];
     memset(value, 0, MAP_MAX_VALUE_LEN);
+    map_role_t role;
 
     switch (packet_type){
         case HCI_EVENT_PACKET:
@@ -170,14 +172,16 @@ static void packet_handler(uint8_t packet_type, uint16_t channel, uint8_t *packe
                     switch (hci_event_map_meta_get_subevent_code(packet)){
                         case MAP_SUBEVENT_CONNECTION_OPENED:
                             status = map_subevent_connection_opened_get_status(packet);
+                            role   = map_subevent_connection_opened_get_role(packet);
                             if (status){
-                                printf("[!] Connection failed, status 0x%02x\n", status);
+                                printf("[!] %s Connection failed, status 0x%02x\n", map_role2str(role), status);
                             } else {
-                                printf("[+] Connected\n");
+                                printf("[+] %s Connected\n", map_role2str(role));
                             }
                             break;
                         case MAP_SUBEVENT_CONNECTION_CLOSED:
-                            printf("[+] Connection closed\n");
+                            role   = map_subevent_connection_closed_get_role(packet);
+                            printf("[+] %s Connection closed\n", map_role2str(role));
                             break;
                         case MAP_SUBEVENT_OPERATION_COMPLETED:
                             printf("[+] Operation complete\n");
@@ -239,8 +243,9 @@ int btstack_main(int argc, const char * argv[]){
     // init MAP Client
     map_client_init();
     // init MAP Server
-    map_server_init();
-    
+    map_server_init(0x0400);
+    map_server_register_packet_handler(packet_handler);
+
     sdp_init();
     // setup AVDTP sink
     map_message_type_t supported_message_types = MAP_MESSAGE_TYPE_SMS_GSM;

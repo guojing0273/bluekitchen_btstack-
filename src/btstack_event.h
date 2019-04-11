@@ -7029,6 +7029,15 @@ static inline hci_con_handle_t map_subevent_connection_opened_get_con_handle(con
 static inline uint8_t map_subevent_connection_opened_get_incoming(const uint8_t * event){
     return event[14];
 }
+/**
+ * @brief Get field role from event MAP_SUBEVENT_CONNECTION_OPENED
+ * @param event packet
+ * @return role
+ * @note: btstack_type 1
+ */
+static inline uint8_t map_subevent_connection_opened_get_role(const uint8_t * event){
+    return event[15];
+}
 
 /**
  * @brief Get field map_cid from event MAP_SUBEVENT_CONNECTION_CLOSED
@@ -7038,6 +7047,15 @@ static inline uint8_t map_subevent_connection_opened_get_incoming(const uint8_t 
  */
 static inline uint16_t map_subevent_connection_closed_get_map_cid(const uint8_t * event){
     return little_endian_read_16(event, 3);
+}
+/**
+ * @brief Get field role from event MAP_SUBEVENT_CONNECTION_CLOSED
+ * @param event packet
+ * @return role
+ * @note: btstack_type 1
+ */
+static inline uint8_t map_subevent_connection_closed_get_role(const uint8_t * event){
+    return event[5];
 }
 
 /**

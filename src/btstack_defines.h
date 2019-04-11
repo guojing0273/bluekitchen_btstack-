@@ -2238,20 +2238,22 @@ typedef uint8_t sm_key_t[16];
 // MAP Meta Event Group
 
 /**
- * @format 121BH1
+ * @format 121BH11
  * @param subevent_code
  * @param map_cid
  * @param status
  * @param bd_addr
  * @param con_handle
  * @param incoming
+ * @param role
  */
 #define MAP_SUBEVENT_CONNECTION_OPENED                                    0x01
 
 /**
- * @format 12
+ * @format 121
  * @param subevent_code
  * @param map_cid
+ * @param role
 */
 #define MAP_SUBEVENT_CONNECTION_CLOSED                                    0x02
 

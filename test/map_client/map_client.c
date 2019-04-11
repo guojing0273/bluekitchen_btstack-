@@ -92,6 +92,7 @@ typedef enum {
     
     MAP_W2_SEND_DISCONNECT_REQUEST,
     MAP_W4_DISCONNECT_RESPONSE,
+    MAP_W4_GOEP_DISCONNECT
 } map_state_t;
 
 typedef struct map_client {
@@ -116,7 +117,7 @@ static map_client_t _map_client;
 static map_client_t * map_client = &_map_client;
 
 static void map_client_emit_connected_event(map_client_t * context, uint8_t status){
-    uint8_t event[15];
+    uint8_t event[16];
     int pos = 0;
     event[pos++] = HCI_EVENT_MAP_META;
     pos++;  // skip len
@@ -129,19 +130,21 @@ static void map_client_emit_connected_event(map_client_t * context, uint8_t stat
     little_endian_store_16(event,pos,context->con_handle);
     pos += 2;
     event[pos++] = context->incoming;
+    event[pos++] = MAP_CLIENT;
     event[1] = pos - 2;
     if (pos != sizeof(event)) log_error("map_client_emit_connected_event size %u", pos);
     context->client_handler(HCI_EVENT_PACKET, context->cid, &event[0], pos);
 }  
 
 static void map_client_emit_connection_closed_event(map_client_t * context){
-    uint8_t event[5];
+    uint8_t event[6];
     int pos = 0;
     event[pos++] = HCI_EVENT_MAP_META;
     pos++;  // skip len
     event[pos++] = MAP_SUBEVENT_CONNECTION_CLOSED;
     little_endian_store_16(event,pos,context->cid);
     pos+=2;
+    event[pos++] = MAP_CLIENT;
     event[1] = pos - 2;
     if (pos != sizeof(event)) log_error("map_client_emit_connection_closed_event size %u", pos);
     context->client_handler(HCI_EVENT_PACKET, context->cid, &event[0], pos);
@@ -309,24 +312,24 @@ static void map_packet_handler(uint8_t packet_type, uint16_t channel, uint8_t *p
                     switch (hci_event_goep_meta_get_subevent_code(packet)){
                         case GOEP_SUBEVENT_CONNECTION_OPENED:
                             status = goep_subevent_connection_opened_get_status(packet);
+                            goep_subevent_connection_opened_get_bd_addr(packet, map_client->bd_addr); 
                             map_client->con_handle = goep_subevent_connection_opened_get_con_handle(packet);
                             map_client->incoming = goep_subevent_connection_opened_get_incoming(packet);
-                            goep_subevent_connection_opened_get_bd_addr(packet, map_client->bd_addr); 
+                            
                             if (status){
                                 log_info("map: connection failed %u", status);
                                 map_client->state = MAP_INIT;
                                 map_client_emit_connected_event(map_client, status);
-                            } else {
-                                log_info("map: connection established");
-                                map_client->goep_cid = goep_subevent_connection_opened_get_goep_cid(packet);
-                                map_client->state = MAP_W2_SEND_CONNECT_REQUEST;
-                                goep_client_request_can_send_now(map_client->goep_cid);
-                            }
+                                break;
+                            } 
+                        
+                            log_info("map: connection established");
+                            map_client->goep_cid = goep_subevent_connection_opened_get_goep_cid(packet);
+                            map_client->state = MAP_W2_SEND_CONNECT_REQUEST;
+                            goep_client_request_can_send_now(map_client->goep_cid);
                             break;
                         case GOEP_SUBEVENT_CONNECTION_CLOSED:
-                            if (map_client->state != MAP_CONNECTED){
-                                // map_client_emit_operation_complete_event(map_client, OBEX_DISCONNECTED);
-                            }
+                            if (map_client->state != MAP_W4_GOEP_DISCONNECT) break;
                             map_client->state = MAP_INIT;
                             map_client_emit_connection_closed_event(map_client);
                             break;
@@ -362,7 +365,7 @@ static void map_packet_handler(uint8_t packet_type, uint16_t channel, uint8_t *p
                     }
                     break;
                 case MAP_W4_DISCONNECT_RESPONSE:
-                    map_client->state = MAP_INIT;
+                    map_client->state = MAP_W4_GOEP_DISCONNECT;
                     goep_client_disconnect(map_client->goep_cid);
                     break;
                 
