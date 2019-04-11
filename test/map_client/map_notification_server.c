@@ -90,6 +90,8 @@ typedef struct map_server {
 
 static map_server_t _map_server;
 static map_server_t * map_server = &_map_server;
+static map_connection_t * map_connection = &_map_server.connection;
+
 static uint16_t maximum_obex_packet_length;
 
 void map_notification_server_register_packet_handler(btstack_packet_handler_t callback){
@@ -97,7 +99,7 @@ void map_notification_server_register_packet_handler(btstack_packet_handler_t ca
         log_error("map_server_register_packet_handler called with NULL callback");
         return;
     }
-    map_server->connection.callback = callback;
+    map_connection->callback = callback;
 }
 
 void map_notification_server_create_sdp_record(uint8_t * service, uint32_t service_record_handle, uint8_t instance_id,
@@ -132,8 +134,8 @@ static void map_packet_handler(uint8_t packet_type, uint16_t channel, uint8_t *p
                         case GOEP_SUBEVENT_CONNECTION_OPENED:
                             if (map_server->state != MAP_INIT) return;
                             status = goep_subevent_connection_opened_get_status(packet);
-                            map_server->connection.con_handle = goep_subevent_connection_opened_get_con_handle(packet);
-                            goep_subevent_connection_opened_get_bd_addr(packet, map_server->connection.bd_addr); 
+                            map_connection->con_handle = goep_subevent_connection_opened_get_con_handle(packet);
+                            goep_subevent_connection_opened_get_bd_addr(packet, map_connection->bd_addr); 
                             if (status){
                                 log_info("MAP notification server: connection failed %u", status);
                                 map_server->state = MAP_INIT;
@@ -141,7 +143,7 @@ static void map_packet_handler(uint8_t packet_type, uint16_t channel, uint8_t *p
                                 break;
                             } 
                             log_info("MAP notification server: connection established");
-                            map_server->connection.goep_cid = goep_subevent_connection_opened_get_goep_cid(packet);
+                            map_connection->goep_cid = goep_subevent_connection_opened_get_goep_cid(packet);
                             map_server->state = MAP_CONNECTED;
                             map_emit_connected_event(&map_server->connection, status);
                             break;
@@ -202,8 +204,8 @@ static void map_packet_handler(uint8_t packet_type, uint16_t channel, uint8_t *p
 void map_notification_server_init(uint16_t mtu){
     memset(map_server, 0, sizeof(map_server_t));
     map_server->state = MAP_INIT;
-    map_server->connection.role = MAP_MESSAGE_NOTIFICATION_SERVICE;
-    map_server->connection.cid = 1;
+    map_connection->role = MAP_MESSAGE_NOTIFICATION_SERVICE;
+    map_connection->cid = 1;
     maximum_obex_packet_length = mtu;
     goep_server_register_service(&map_packet_handler, rfcomm_channel_nr, 0xFFFF, 0, 0xFFFF, LEVEL_0);
 }
