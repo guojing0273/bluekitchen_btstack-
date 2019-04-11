@@ -88,6 +88,8 @@ uint8_t goep_server_register_service(btstack_packet_handler_t packet_handler, ui
                 uint16_t l2cap_psm, uint16_t l2cap_mtu, gap_security_level_t security_level);
 
 
+void goep_server_request_can_send_now(uint16_t goep_cid, goep_connection_type_t con_type);
+
 /* API_END */
 
 #if defined __cplusplus
