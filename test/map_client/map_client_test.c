@@ -243,8 +243,8 @@ int btstack_main(int argc, const char * argv[]){
     // init MAP Client
     map_client_init();
     // init MAP Server
-    map_server_init(0x0400);
-    map_server_register_packet_handler(packet_handler);
+    map_notification_server_init(0x0400);
+    map_notification_server_register_packet_handler(packet_handler);
 
     sdp_init();
     // setup AVDTP sink
@@ -254,7 +254,7 @@ int btstack_main(int argc, const char * argv[]){
     int rfcomm_channel_nr = 1;
 
     memset(map_message_notification_service_buffer, 0, sizeof(map_message_notification_service_buffer));
-    map_message_notification_service_create_sdp_record(map_message_notification_service_buffer, 0x10001,
+    map_notification_server_create_sdp_record(map_message_notification_service_buffer, 0x10001,
             1, rfcomm_channel_nr, 1, supported_message_types, supported_features, name);
     sdp_register_service(map_message_notification_service_buffer);
 

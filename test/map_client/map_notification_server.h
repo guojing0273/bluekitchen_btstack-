@@ -35,8 +35,8 @@
  *
  */
 
-#ifndef __MAP_SERVER_H
-#define __MAP_SERVER_H
+#ifndef __MAP_NOTIFICATION_SERVER_H
+#define __MAP_NOTIFICATION_SERVER_H
 
 #if defined __cplusplus
 extern "C" {
@@ -49,21 +49,6 @@ extern "C" {
 /* API_START */
 
 /**
- * @brief Create SDP record for Message Access Service
- * @param service
- * @param service_record_handle
- * @param instance_id
- * @param rfcomm_channel_nr
- * @param goep_l2cap_psm
- * @param supported_message_types
- * @param supported_features
- * @param name
- */
-void map_message_access_service_create_sdp_record(uint8_t * service, uint32_t service_record_handle, uint8_t instance_id,
-    int rfcomm_channel_nr, uint16_t goep_l2cap_psm, map_message_type_t supported_message_types, uint32_t supported_features, const char * name);
-
-
-/**
  * @brief Create SDP record for Message Notification Service
  * @param service
  * @param service_record_handle
@@ -74,20 +59,20 @@ void map_message_access_service_create_sdp_record(uint8_t * service, uint32_t se
  * @param supported_features
  * @param name
  */
-void map_message_notification_service_create_sdp_record(uint8_t * service, uint32_t service_record_handle, uint8_t instance_id,
+void map_notification_server_create_sdp_record(uint8_t * service, uint32_t service_record_handle, uint8_t instance_id,
     int rfcomm_channel_nr, uint16_t goep_l2cap_psm, map_message_type_t supported_message_types, uint32_t supported_features, const char * name);
 
 /**
  * @brief Init MAP Server
  * @param maximum_obex_packet_length
  */
-void map_server_init(uint16_t maximum_obex_packet_length);
+void map_notification_server_init(uint16_t maximum_obex_packet_length);
 
 /**
  * @brief Register packet handler
  * @param packet_handler
  */
-void map_server_register_packet_handler(btstack_packet_handler_t packet_handler);
+void map_notification_server_register_packet_handler(btstack_packet_handler_t packet_handler);
 
 /* API_END */
 

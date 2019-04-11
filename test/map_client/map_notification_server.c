@@ -35,7 +35,7 @@
  *
  */
 
-#define __BTSTACK_FILE__ "map_server.c"
+#define __BTSTACK_FILE__ "map_notification_server.c"
  
 #include "btstack_config.h"
 
@@ -96,7 +96,7 @@ static map_server_t _map_server;
 static map_server_t * map_server = &_map_server;
 static uint16_t maximum_obex_packet_length;
 
-void map_server_register_packet_handler(btstack_packet_handler_t callback){
+void map_notification_server_register_packet_handler(btstack_packet_handler_t callback){
     if (callback == NULL){
         log_error("map_server_register_packet_handler called with NULL callback");
         return;
@@ -104,13 +104,7 @@ void map_server_register_packet_handler(btstack_packet_handler_t callback){
     map_server->callback = callback;
 }
 
-void map_message_access_service_create_sdp_record(uint8_t * service, uint32_t service_record_handle, uint8_t instance_id,
-    int channel_nr, uint16_t goep_l2cap_psm, map_message_type_t supported_message_types, uint32_t supported_features, const char * name){
-    map_create_sdp_record(service, service_record_handle, BLUETOOTH_SERVICE_CLASS_MESSAGE_ACCESS_SERVER, instance_id, channel_nr,
-        goep_l2cap_psm, supported_message_types, supported_features, name);
-}
-
-void map_message_notification_service_create_sdp_record(uint8_t * service, uint32_t service_record_handle, uint8_t instance_id,
+void map_notification_server_create_sdp_record(uint8_t * service, uint32_t service_record_handle, uint8_t instance_id,
     int channel_nr, uint16_t goep_l2cap_psm, map_message_type_t supported_message_types, uint32_t supported_features, const char * name){
     map_create_sdp_record(service, service_record_handle, BLUETOOTH_SERVICE_CLASS_MESSAGE_NOTIFICATION_SERVER, instance_id, channel_nr,
         goep_l2cap_psm, supported_message_types, supported_features, name);
@@ -243,7 +237,7 @@ static void map_packet_handler(uint8_t packet_type, uint16_t channel, uint8_t *p
     }
 }
 
-void map_server_init(uint16_t mtu){
+void map_notification_server_init(uint16_t mtu){
     memset(map_server, 0, sizeof(map_server_t));
     map_server->state = MAP_INIT;
     map_server->cid = 1;
