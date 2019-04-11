@@ -98,8 +98,9 @@ static uint8_t obex_message_builder_header_add_connection_id(uint8_t * buffer, u
     return obex_message_builder_header_add_word(buffer, buffer_len, OBEX_HEADER_CONNECTION_ID, obex_connection_id);
 }
 
-uint8_t obex_message_builder_request_create_connect(uint8_t * buffer, uint16_t buffer_len, uint8_t obex_version_number, uint8_t flags, uint16_t maximum_obex_packet_length){
-    uint8_t status = obex_message_builder_packet_init(buffer, buffer_len, OBEX_OPCODE_CONNECT);
+static inline uint8_t obex_message_builder_create_connect(uint8_t * buffer, uint16_t buffer_len, uint8_t opcode,
+    uint8_t obex_version_number, uint8_t flags, uint16_t maximum_obex_packet_length){
+    uint8_t status = obex_message_builder_packet_init(buffer, buffer_len, opcode);
     if (status != ERROR_CODE_SUCCESS) return status;
 
     uint8_t fields[4];
@@ -109,17 +110,17 @@ uint8_t obex_message_builder_request_create_connect(uint8_t * buffer, uint16_t b
     return obex_message_builder_packet_append(buffer, buffer_len, &fields[0], sizeof(fields));
 }
 
+uint8_t obex_message_builder_request_create_connect(uint8_t * buffer, uint16_t buffer_len, 
+    uint8_t obex_version_number, uint8_t flags, uint16_t maximum_obex_packet_length){
+
+    return obex_message_builder_create_connect(buffer, buffer_len, OBEX_OPCODE_CONNECT, obex_version_number, flags, maximum_obex_packet_length);
+}
+
 uint8_t obex_message_builder_response_create_connect(uint8_t * buffer, uint16_t buffer_len, uint8_t obex_version_number, 
     uint8_t flags, uint16_t maximum_obex_packet_length, uint32_t obex_connection_id){
-    uint8_t status = obex_message_builder_packet_init(buffer, buffer_len, OBEX_RESP_SUCCESS);
+
+    uint8_t status = obex_message_builder_create_connect(buffer, buffer_len, OBEX_RESP_SUCCESS, obex_version_number, flags, maximum_obex_packet_length);
     if (status != ERROR_CODE_SUCCESS) return status;
-
-    uint8_t fields[4];
-    fields[0] = obex_version_number;
-    fields[1] = flags;
-    big_endian_store_16(fields, 2, maximum_obex_packet_length);
-
-    obex_message_builder_packet_append(buffer, buffer_len, &fields[0], sizeof(fields));
     return obex_message_builder_header_add_connection_id(buffer, buffer_len, obex_connection_id);
 }
 
