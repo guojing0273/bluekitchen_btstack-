@@ -59,6 +59,16 @@ typedef enum {
     MAP_MESSAGE_NOTIFICATION_SERVICE
 } map_role_t;
 
+typedef struct {
+    uint16_t  cid;
+    bd_addr_t bd_addr;
+    hci_con_handle_t con_handle;
+    uint8_t   incoming;
+    uint16_t  goep_cid;
+    btstack_packet_handler_t callback;
+    map_role_t role;
+} map_connection_t;
+
 typedef enum {
     MAP_MESSAGE_TYPE_EMAIL = 0,
     MAP_MESSAGE_TYPE_SMS_GSM,
