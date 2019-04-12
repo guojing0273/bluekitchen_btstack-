@@ -62,7 +62,7 @@
 #include "classic/goep_client.h"
 #include "classic/goep_server.h"
 #include "classic/obex.h"
-#include "map_client.h"
+#include "map_access_client.h"
 #include "map_server.h"
 #include "map_util.h"
 #include "classic/sdp_client.h"
@@ -114,32 +114,32 @@ static void stdin_process(char c){
     switch (c){
         case 'a':
             printf("[+] Connecting to %s...\n", bd_addr_to_str(remote_addr));
-            map_client_connect(&packet_handler, remote_addr, &map_cid);
+            map_access_client_connect(&packet_handler, remote_addr, &map_cid);
             break;
         case 'A':
             printf("[+] Disconnect from %s...\n", bd_addr_to_str(remote_addr));
-            map_client_disconnect(map_cid);
+            map_access_client_disconnect(map_cid);
             break;
 
         case 'p':
             printf("[+] Set path \'%s\'\n", path);
-            map_client_set_path(map_cid, path);
+            map_access_client_set_path(map_cid, path);
             break;
         case 'f':
             printf("[+] Get folder listing\n");
-            map_client_get_folder_listing(map_cid);
+            map_access_client_get_folder_listing(map_cid);
             break;
         case 'F':
             printf("[+] Get message listing for folder \'%s\'\n", folder_name);
-            map_client_get_message_listing_for_folder(map_cid, folder_name);
+            map_access_client_get_message_listing_for_folder(map_cid, folder_name);
             break;
         case 'l':
             printf("[+] Get message for hardcoded handle\n");
-            map_client_get_message_with_handle(map_cid, message_handle, 1);
+            map_access_client_get_message_with_handle(map_cid, message_handle, 1);
             break;
         case 'n':
             printf("[+] Enable notifications\n");
-            map_client_enable_notifications(map_cid);
+            map_access_client_enable_notifications(map_cid);
             break;
         default:
             show_usage();
@@ -241,7 +241,7 @@ int btstack_main(int argc, const char * argv[]){
     goep_server_init();
     
     // init MAP Client
-    map_client_init();
+    map_access_client_init();
     // init MAP Server
     map_notification_server_init(0x0400);
     map_notification_server_register_packet_handler(packet_handler);

@@ -35,7 +35,7 @@
  *
  */
 
-#define __BTSTACK_FILE__ "map_client.c"
+#define __BTSTACK_FILE__ "map_access_client.c"
  
 #include "btstack_config.h"
 
@@ -60,13 +60,13 @@
 #include "classic/obex.h"
 #include "classic/obex_iterator.h"
 #include "classic/goep_client.h"
-#include "map_client.h"
+#include "map_access_client.h"
 #include "map_util.h"
 
 #define MAP_MAX_NUM_ENTRIES 1024
 
 // map access service bb582b40-420c-11db-b0de-0800200c9a66
-static const uint8_t map_client_access_service_uuid[] = {0xbb, 0x58, 0x2b, 0x40, 0x42, 0xc, 0x11, 0xdb, 0xb0, 0xde, 0x8, 0x0, 0x20, 0xc, 0x9a, 0x66};
+static const uint8_t map_access_client_service_uuid[] = {0xbb, 0x58, 0x2b, 0x40, 0x42, 0xc, 0x11, 0xdb, 0xb0, 0xde, 0x8, 0x0, 0x20, 0xc, 0x9a, 0x66};
 static uint32_t map_supported_features = 0x1F;
 
 typedef enum {
@@ -113,7 +113,7 @@ static map_access_client_t _map_client;
 static map_access_client_t * map_client = &_map_client;
 static map_connection_t * map_connection = &_map_client.connection;
     
-static void map_client_emit_operation_complete_event(map_connection_t * context, uint8_t status){
+static void map_access_client_emit_operation_complete_event(map_connection_t * context, uint8_t status){
     uint8_t event[6];
     int pos = 0;
     event[pos++] = HCI_EVENT_MAP_META;
@@ -139,7 +139,7 @@ static void map_handle_can_send_now(void){
     switch (map_client->state){
         case MAP_W2_SEND_CONNECT_REQUEST:
             goep_client_request_create_connect(map_connection->goep_cid, OBEX_VERSION, 0, OBEX_MAX_PACKETLEN_DEFAULT);
-            goep_client_header_add_target(map_connection->goep_cid, map_client_access_service_uuid, 16);
+            goep_client_header_add_target(map_connection->goep_cid, map_access_client_service_uuid, 16);
             // Mandatory if the PSE advertises a PbapSupportedFeatures attribute in its SDP record, else excluded.
             // if (goep_client_get_map_supported_features(map_connection->goep_cid) != MAP_FEATURES_NOT_PRESENT){
                 application_parameters[0] = 0x29; // MAP_APPLICATION_PARAMETER_MAP_SUPPORTED_FEATURES;
@@ -332,14 +332,14 @@ static void map_packet_handler(uint8_t packet_type, uint16_t channel, uint8_t *p
                         } else {
                             map_client->current_folder = NULL;   
                             map_client->state = MAP_CONNECTED;
-                            map_client_emit_operation_complete_event(map_connection, 0);
+                            map_access_client_emit_operation_complete_event(map_connection, 0);
                         }
                     } else if (packet[0] == OBEX_RESP_NOT_FOUND){
                         map_client->state = MAP_CONNECTED;
-                        map_client_emit_operation_complete_event(map_connection, OBEX_NOT_FOUND);
+                        map_access_client_emit_operation_complete_event(map_connection, OBEX_NOT_FOUND);
                     } else {
                         map_client->state = MAP_CONNECTED;
-                        map_client_emit_operation_complete_event(map_connection, OBEX_UNKNOWN_ERROR);
+                        map_access_client_emit_operation_complete_event(map_connection, OBEX_UNKNOWN_ERROR);
                     }
                     break;
 
@@ -410,14 +410,14 @@ static void map_packet_handler(uint8_t packet_type, uint16_t channel, uint8_t *p
     }
 }
 
-void map_client_init(void){
+void map_access_client_init(void){
     memset(map_client, 0, sizeof(map_access_client_t));
     map_client->state = MAP_INIT;
     map_connection->cid = 1;
     map_connection->role = MAP_CLIENT;
 }
 
-uint8_t map_client_connect(btstack_packet_handler_t handler, bd_addr_t addr, uint16_t * out_cid){
+uint8_t map_access_client_connect(btstack_packet_handler_t handler, bd_addr_t addr, uint16_t * out_cid){
     if (map_client->state != MAP_INIT) return BTSTACK_MEMORY_ALLOC_FAILED;
 
     map_client->state = MAP_W4_GOEP_CONNECTION;
@@ -429,7 +429,7 @@ uint8_t map_client_connect(btstack_packet_handler_t handler, bd_addr_t addr, uin
     return 0;
 }
 
-uint8_t map_client_disconnect(uint16_t map_cid){
+uint8_t map_access_client_disconnect(uint16_t map_cid){
     UNUSED(map_cid);
     if (map_client->state != MAP_CONNECTED) return BTSTACK_BUSY;
     map_client->state = MAP_W2_SEND_DISCONNECT_REQUEST;
@@ -437,7 +437,7 @@ uint8_t map_client_disconnect(uint16_t map_cid){
     return 0;
 }
 
-uint8_t map_client_get_folder_listing(uint16_t map_cid){
+uint8_t map_access_client_get_folder_listing(uint16_t map_cid){
     UNUSED(map_cid);
     if (map_client->state != MAP_CONNECTED) return BTSTACK_BUSY;
     map_client->state = MAP_W2_SEND_GET_FOLDERS;
@@ -445,7 +445,7 @@ uint8_t map_client_get_folder_listing(uint16_t map_cid){
     return 0;
 }
 
-uint8_t map_client_get_message_listing_for_folder(uint16_t map_cid, const char * folder_name){
+uint8_t map_access_client_get_message_listing_for_folder(uint16_t map_cid, const char * folder_name){
     UNUSED(map_cid);
     if (map_client->state != MAP_CONNECTED) return BTSTACK_BUSY;
     map_client->state = MAP_W2_SEND_GET_MESSAGES_FOR_FOLDER;
@@ -454,7 +454,7 @@ uint8_t map_client_get_message_listing_for_folder(uint16_t map_cid, const char *
     return 0;    
 }
 
-uint8_t map_client_get_message_with_handle(uint16_t map_cid, const map_message_handle_t message_handle, uint8_t with_attachment){
+uint8_t map_access_client_get_message_with_handle(uint16_t map_cid, const map_message_handle_t message_handle, uint8_t with_attachment){
     UNUSED(map_cid);
     if (map_client->state != MAP_CONNECTED) return BTSTACK_BUSY;
     map_client->state = MAP_W2_SEND_GET_MESSAGE_WITH_HANDLE;
@@ -464,7 +464,7 @@ uint8_t map_client_get_message_with_handle(uint16_t map_cid, const map_message_h
     return 0;    
 }
 
-uint8_t map_client_set_path(uint16_t map_cid, const char * path){
+uint8_t map_access_client_set_path(uint16_t map_cid, const char * path){
     UNUSED(map_cid);
     if (map_client->state != MAP_CONNECTED) return BTSTACK_BUSY;
     map_client->state = MAP_W2_SET_PATH_ROOT;
@@ -474,7 +474,7 @@ uint8_t map_client_set_path(uint16_t map_cid, const char * path){
     return 0;    
 }
 
-uint8_t map_client_enable_notifications(uint16_t map_cid){
+uint8_t map_access_client_enable_notifications(uint16_t map_cid){
     UNUSED(map_cid);
     if (map_client->state != MAP_CONNECTED) return BTSTACK_BUSY;
     map_client->state = MAP_W2_SET_NOTIFICATION;
@@ -483,7 +483,7 @@ uint8_t map_client_enable_notifications(uint16_t map_cid){
     return 0;    
 }
 
-uint8_t map_client_disable_notifications(uint16_t map_cid){
+uint8_t map_access_client_disable_notifications(uint16_t map_cid){
     UNUSED(map_cid);
     if (map_client->state != MAP_CONNECTED) return BTSTACK_BUSY;
     map_client->state = MAP_W2_SET_NOTIFICATION;

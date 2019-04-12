@@ -28,16 +28,16 @@ CFLAGS  += $(shell pkg-config libusb-1.0 --cflags)
 LDFLAGS += $(shell pkg-config libusb-1.0 --libs)
 
 MAP = \
+	btstack_util.c \
+	goep_client.c \
+	goep_server.c \
+	hci_dump.c \
+	map_access_client.c \
+	map_notification_server.c \
+	map_util.c \
 	obex_iterator.c \
 	obex_message_builder.c \
-	goep_client.c \
 	yxml.c \
-	btstack_util.c \
-	hci_dump.c \
-	map_util.c \
-	map_client.c \
-	map_notification_server.c \
-	goep_server.c \
     
 MAP_OBJ = $(MAP:.c=.o)
 
