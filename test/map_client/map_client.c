@@ -94,12 +94,12 @@ typedef enum {
     MAP_W2_SEND_DISCONNECT_REQUEST,
     MAP_W4_DISCONNECT_RESPONSE,
     MAP_W4_GOEP_DISCONNECT
-} map_state_t;
+} map_access_client_state_t;
 
-typedef struct map_client {
-    map_state_t state;
+typedef struct {
     map_connection_t connection;
-
+    map_access_client_state_t state;
+    
     const char * folder_name;
     const char * current_folder;
     uint16_t set_path_offset;
@@ -107,10 +107,10 @@ typedef struct map_client {
     
     map_message_handle_t message_handle; 
     uint8_t get_message_attachment;
-} map_client_t;
+} map_access_client_t;
 
-static map_client_t _map_client;
-static map_client_t * map_client = &_map_client;
+static map_access_client_t _map_client;
+static map_access_client_t * map_client = &_map_client;
 static map_connection_t * map_connection = &_map_client.connection;
     
 static void map_client_emit_operation_complete_event(map_connection_t * context, uint8_t status){
@@ -411,7 +411,7 @@ static void map_packet_handler(uint8_t packet_type, uint16_t channel, uint8_t *p
 }
 
 void map_client_init(void){
-    memset(map_client, 0, sizeof(map_client_t));
+    memset(map_client, 0, sizeof(map_access_client_t));
     map_client->state = MAP_INIT;
     map_connection->cid = 1;
     map_connection->role = MAP_CLIENT;
