@@ -354,6 +354,7 @@ static void map_packet_handler(uint8_t packet_type, uint16_t channel, uint8_t *p
                             case OBEX_HEADER_BODY:
                             case OBEX_HEADER_END_OF_BODY:
                                 printf("%s\n", data);
+                                // map_client_parse_folder_listing(map_connection->callback, map_connection->cid, data, data_len);
                                 break;
                             default:
                                 break;

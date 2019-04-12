@@ -41,31 +41,6 @@ const map_message_handle_t expected_message_handles[] = {
 
 const int num_expected_message_handles = 2;
 
-#if 0
-const static char * message = 
-"BEGIN:BMSG\n"
-"VERSION:1.0\n"
-"STATUS:UNREAD\n"
-"TYPE:SMS_GSM\n"
-"FOLDER:telecom/msg/INBOX\n"
-"BEGIN:VCARD\n"
-"VERSION:3.0\n"
-"FN:\n"
-"N:\n"
-"TEL:Swisscom\n"
-"END:VCARD\n"
-"BEGIN:BENV\n"
-"BEGIN:BBODY\n"
-"CHARSET:UTF-8\n"
-"LENGTH:172\n"
-"BEGIN:MSG\n"
-"Lieber Kunde. Information und Hilfe zur Inbetriebnahme Ihres Mobiltelefons haben wir unter www.swisscom.ch/handy-einrichten für Sie zusammengestellt.\n"
-"END:MSG\n"
-"END:BBODY\n"
-"END:BENV\n"
-"END:BMSG\n";
-#endif
-
 /* xml parser */
 static int num_found_items;
 
