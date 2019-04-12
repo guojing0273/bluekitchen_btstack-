@@ -77,19 +77,19 @@ typedef enum {
     MAP_INIT = 0,
     MAP_W2_SEND_CONNECTION_STATUS,
     MAP_CONNECTED
-} map_state_t;
+} map_notification_server_state_t;
 
-typedef struct map_server {
-    map_state_t state;
+typedef struct {
     map_connection_t connection;
-
+    map_notification_server_state_t state;
+    
     uint16_t maximum_obex_packet_length;
     uint8_t  flags;
-} map_server_t;
+} map_notification_server_t;
 
 
-static map_server_t _map_server;
-static map_server_t * map_server = &_map_server;
+static map_notification_server_t _map_server;
+static map_notification_server_t * map_server = &_map_server;
 static map_connection_t * map_connection = &_map_server.connection;
 
 static uint16_t maximum_obex_packet_length;
@@ -202,7 +202,7 @@ static void map_packet_handler(uint8_t packet_type, uint16_t channel, uint8_t *p
 }
 
 void map_notification_server_init(uint16_t mtu){
-    memset(map_server, 0, sizeof(map_server_t));
+    memset(map_server, 0, sizeof(map_notification_server_t));
     map_server->state = MAP_INIT;
     map_connection->role = MAP_MESSAGE_NOTIFICATION_SERVICE;
     map_connection->cid = 1;
