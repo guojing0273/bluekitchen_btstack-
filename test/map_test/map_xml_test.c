@@ -30,16 +30,34 @@ const int num_expected_folders = 5;
 const static char * messages = 
 "<?xml version='1.0' encoding='utf-8' standalone='yes' ?>"
 "<MAP-msg-listing version=\"1.0\">"
-"    <msg handle=\"0400000000000002\" subject=\"Ping\" datetime=\"20190319T223947\" sender_name=\"John Doe\" sender_addressing=\"+41786786211\" recipient_name=\"@@@@@@@@@@@@@@@@\" recipient_addressing=\"+41798155782\" type=\"SMS_GSM\" size=\"4\" text=\"yes\" reception_status=\"complete\" attachment_size=\"0\" priority=\"no\" read=\"no\" sent=\"no\" protected=\"no\" />"
-"    <msg handle=\"0400000000000001\" subject=\"Lieber Kunde. Information und Hilfe zur Inbetriebnahme Ihres Mobiltelefons haben wir unter www.swisscom.ch/handy-einrichten für Sie zusammengestellt.\" datetime=\"20190308T224830\" sender_name=\"\" sender_addressing=\"Swisscom\" recipient_name=\"@@@@@@@@@@@@@@@@\" recipient_addressing=\"+41798155782\" type=\"SMS_GSM\" size=\"149\" text=\"yes\" reception_status=\"complete\" attachment_size=\"0\" priority=\"no\" read=\"no\" sent=\"no\" protected=\"no\" />"
+    "    <msg handle=\"040000000000000B\" subject=\"Und noch spezielle Zeichen š ś ç ć č und emojis \" datetime=\"20190415T083558\" sender_name=\"John Doe\" sender_addressing=\"+41786786211\" recipient_name=\"@@@@@@@@@@@@@@@@\" recipient_addressing=\"+41798155782\" type=\"SMS_GSM\" size=\"58\" text=\"yes\" reception_status=\"complete\" attachment_size=\"0\" priority=\"no\" read=\"no\" sent=\"no\" protected=\"no\" />"
+    "    <msg handle=\"040000000000000A\" subject=\"Ein NewlineZwei NewlinesUmlaute äöüß ohne schlimmeres\" datetime=\"20190413T163014\" sender_name=\"John Doe\" sender_addressing=\"+41786786211\" recipient_name=\"@@@@@@@@@@@@@@@@\" recipient_addressing=\"+41798155782\" type=\"SMS_GSM\" size=\"57\" text=\"yes\" reception_status=\"complete\" attachment_size=\"0\" priority=\"no\" read=\"no\" sent=\"no\" protected=\"no\" />"
+    "    <msg handle=\"0400000000000009\" subject=\"Die Tagesflatrate von CHF 2.00 für den Datenverkehr in der Schweiz wurde belastet. Neues Guthaben: CHF 1.50. Pakete kaufen und Optionen verwalten unter http://cockpit.swisscom.ch. Swisscom\" datetime=\"20190405T221456\" sender_name=\"\" sender_addressing=\"Swisscom\" recipient_name=\"@@@@@@@@@@@@@@@@\" recipient_addressing=\"+41798155782\" type=\"SMS_GSM\" size=\"188\" text=\"yes\" reception_status=\"complete\" attachment_size=\"0\" priority=\"no\" read=\"yes\" sent=\"no\" protected=\"no\" />"
+    "    <msg handle=\"0400000000000008\" subject=\"Die Tagesflatrate von CHF 2.00 für den Datenverkehr in der Schweiz wurde belastet. Neues Guthaben: CHF 3.50. Pakete kaufen und Optionen verwalten unter http://cockpit.swisscom.ch. Swisscom\" datetime=\"20190401T143821\" sender_name=\"\" sender_addressing=\"Swisscom\" recipient_name=\"@@@@@@@@@@@@@@@@\" recipient_addressing=\"+41798155782\" type=\"SMS_GSM\" size=\"188\" text=\"yes\" reception_status=\"complete\" attachment_size=\"0\" priority=\"no\" read=\"yes\" sent=\"no\" protected=\"no\" />"
+    "    <msg handle=\"0400000000000007\" subject=\"Ihr Kombipaket S ist abgelaufen. Ab sofort gelten für Sie wieder die Standardtarife. Guthaben aufladen und Pakete kaufen auf http://cockpit.swisscom.ch. Swisscom\" datetime=\"20190329T003754\" sender_name=\"\" sender_addressing=\"Swisscom\" recipient_name=\"@@@@@@@@@@@@@@@@\" recipient_addressing=\"+41798155782\" type=\"SMS_GSM\" size=\"161\" text=\"yes\" reception_status=\"complete\" attachment_size=\"0\" priority=\"no\" read=\"yes\" sent=\"no\" protected=\"no\" />"
+    "    <msg handle=\"0400000000000006\" subject=\"Ihr Kombipaket S ist noch 24 Stunden gültig. Guthaben aufladen und Pakete kaufen unter http://cockpit.swisscom.ch. Swisscom\" datetime=\"20190328T003805\" sender_name=\"\" sender_addressing=\"Swisscom\" recipient_name=\"@@@@@@@@@@@@@@@@\" recipient_addressing=\"+41798155782\" type=\"SMS_GSM\" size=\"123\" text=\"yes\" reception_status=\"complete\" attachment_size=\"0\" priority=\"no\" read=\"yes\" sent=\"no\" protected=\"no\" />"
+    "    <msg handle=\"0400000000000005\" subject=\"Vorsicht: SMS PIN nie weitergeben! Ihr Einkauf bei Huawei für CHF 0.19 wird bestätigt und Ihrer Rechnung belastet mit PIN: 7372 Hilfe? 0415000866\" datetime=\"20190327T112722\" sender_name=\"\" sender_addressing=\"BOKU\" recipient_name=\"@@@@@@@@@@@@@@@@\" recipient_addressing=\"+41798155782\" type=\"SMS_GSM\" size=\"145\" text=\"yes\" reception_status=\"complete\" attachment_size=\"0\" priority=\"no\" read=\"no\" sent=\"no\" protected=\"no\" />"
+    "    <msg handle=\"0400000000000004\" subject=\"Vorsicht: SMS PIN nie weitergeben! Ihr Einkauf bei Huawei für CHF 0.49 wird bestätigt und Ihrer Rechnung belastet mit PIN: 3714 Hilfe? 0415000866\" datetime=\"20190327T112657\" sender_name=\"\" sender_addressing=\"BOKU\" recipient_name=\"@@@@@@@@@@@@@@@@\" recipient_addressing=\"+41798155782\" type=\"SMS_GSM\" size=\"145\" text=\"yes\" reception_status=\"complete\" attachment_size=\"0\" priority=\"no\" read=\"no\" sent=\"no\" protected=\"no\" />"
+    "    <msg handle=\"0400000000000003\" subject=\"Vorsicht: SMS PIN nie weitergeben! Ihr Einkauf bei Huawei für CHF 0.49 wird bestätigt und Ihrer Rechnung belastet mit PIN: 3714 Hilfe? 0415000866\" datetime=\"20190327T112459\" sender_name=\"\" sender_addressing=\"BOKU\" recipient_name=\"@@@@@@@@@@@@@@@@\" recipient_addressing=\"+41798155782\" type=\"SMS_GSM\" size=\"145\" text=\"yes\" reception_status=\"complete\" attachment_size=\"0\" priority=\"no\" read=\"no\" sent=\"no\" protected=\"no\" />"
+    "    <msg handle=\"0400000000000002\" subject=\"Ping\" datetime=\"20190319T223947\" sender_name=\"John Doe\" sender_addressing=\"+41786786211\" recipient_name=\"@@@@@@@@@@@@@@@@\" recipient_addressing=\"+41798155782\" type=\"SMS_GSM\" size=\"4\" text=\"yes\" reception_status=\"complete\" attachment_size=\"0\" priority=\"no\" read=\"no\" sent=\"no\" protected=\"no\" />"
+    "    <msg handle=\"0400000000000001\" subject=\"Lieber Kunde. Information und Hilfe zur Inbetriebnahme Ihres Mobiltelefons haben wir unter www.swisscom.ch/handy-einrichten für Sie zusammengestellt.\" datetime=\"20190308T224830\" sender_name=\"\" sender_addressing=\"Swisscom\" recipient_name=\"@@@@@@@@@@@@@@@@\" recipient_addressing=\"+41798155782\" type=\"SMS_GSM\" size=\"149\" text=\"yes\" reception_status=\"complete\" attachment_size=\"0\" priority=\"no\" read=\"yes\" sent=\"no\" protected=\"no\" />"
 "</MAP-msg-listing>";
 
 const map_message_handle_t expected_message_handles[] = {
+    {4,0,0,0,0,0,0,0x0B},
+    {4,0,0,0,0,0,0,0x0A},
+    {4,0,0,0,0,0,0,9},
+    {4,0,0,0,0,0,0,8},
+    {4,0,0,0,0,0,0,7},
+    {4,0,0,0,0,0,0,6},
+    {4,0,0,0,0,0,0,5},
+    {4,0,0,0,0,0,0,4},
+    {4,0,0,0,0,0,0,3},
     {4,0,0,0,0,0,0,2},
     {4,0,0,0,0,0,0,1}
 };
 
-const int num_expected_message_handles = 2;
+const int num_expected_message_handles = 11;
 
 /* xml parser */
 static int num_found_items;

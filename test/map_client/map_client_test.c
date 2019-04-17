@@ -63,7 +63,7 @@
 #include "classic/goep_server.h"
 #include "classic/obex.h"
 #include "map_access_client.h"
-#include "map_server.h"
+#include "map_notification_server.h"
 #include "map_util.h"
 #include "classic/sdp_client.h"
 #include "classic/sdp_util.h"

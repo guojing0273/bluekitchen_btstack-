@@ -7,7 +7,7 @@
 #include "btstack_event.h"
 #include "map.h"
 
-#define MAP_MAX_MESSAGE_LEN 200
+#define MAP_MAX_MESSAGE_LEN 1000
 
 static const char * message_tag[] = {
     "TYPE",
@@ -30,7 +30,7 @@ typedef enum {
 
 
 typedef enum {
-    MAP_MESSAGE_IDLE,
+    MAP_MESSAGE_EXPECT_TAG,
     MAP_MESSAGE_BEGIN_TAG,
         
     MAP_MESSAGE_FEATURE_VALUE_FOUND,
@@ -71,18 +71,23 @@ static void map_message_dump(map_message_t * message){
     printf(" - last_name %s\n", message->last_name);
     printf(" - phone %s\n", message->phone);
     printf(" - charset %s\n", message->charset);
-    printf(" - message %s\n", message->message);
+    printf(" - message \n---\n%s\n---\n", message->message);
     printf("\n");
 }
 
+static void reset_buffer(void){
+    memset(parser.value, 0, sizeof(parser.value));
+    parser.offset = 0;
+}
+
 static void line_complete(void){
+    // printf("line complete, state %x\n", parser.state);
     switch (parser.state){
         case MAP_MESSAGE_VALUE:
-            parser.state = MAP_MESSAGE_IDLE;
-            break;
+            parser.message.message[parser.offset++] = '\n';
+            return;
         case MAP_MESSAGE_FEATURE_VALUE_FOUND:
             parser.value[parser.offset++] = 0;
-            printf("%s\n", parser.value);
             // process feature
             switch (parser.tag_id){
                 case MAP_MESSAGE_FEATURE_VALUE_TYPE:
@@ -108,33 +113,39 @@ static void line_complete(void){
                 default:
                     break;
             }
-            parser.state = MAP_MESSAGE_IDLE;
+            parser.state = MAP_MESSAGE_EXPECT_TAG;
             break;
         
         case MAP_MESSAGE_BEGIN_TAG:
-            printf(" %s\n", parser.value);
             if (strcmp(parser.value, "MSG") == 0){
                 parser.state = MAP_MESSAGE_VALUE;
+            } else {
+                parser.state = MAP_MESSAGE_EXPECT_TAG;
+            }
+            break;
+        case MAP_MESSAGE_END_TAG:
+            if (strcmp(parser.value, "MSG") == 0){
+                parser.state = MAP_MESSAGE_EXPECT_TAG;
+            } else {
+                parser.state = MAP_MESSAGE_EXPECT_TAG;
             }
             break;
         default:
-            parser.state = MAP_MESSAGE_IDLE;
-            printf(" %s\n", parser.value);
+            parser.state = MAP_MESSAGE_EXPECT_TAG;
             break;
     }
-    memset(parser.value, 0, sizeof(parser.value));
-    parser.offset = 0;
+    reset_buffer();
 }
 
 static void tag_parsed(void){
     uint16_t i;
     parser.value[parser.offset++] = 0;
-            
     if (strcmp(parser.value, "BEGIN") == 0) {
         parser.state = MAP_MESSAGE_BEGIN_TAG;
     } else if (strcmp(parser.value, "END") == 0) {
         parser.state = MAP_MESSAGE_END_TAG;
     } else {
+        // match wanted features
         parser.state = MAP_MESSAGE_FEATURE_VALUE_IGNORE;
 
         for (i = 0; i < MAP_MESSAGE_FEATURE_VALUE_COUNT; i++){
@@ -145,64 +156,101 @@ static void tag_parsed(void){
             }
         }
     }
-    printf("%s : ", parser.value);
-    memset(parser.value, 0, sizeof(parser.value));
-    parser.offset = 0;
+    reset_buffer();
 }
 
 static void map_access_client_process_message(const uint8_t *packet, uint16_t size){
     parser.offset = 0;
-    parser.state = MAP_MESSAGE_IDLE;
+    parser.state = MAP_MESSAGE_EXPECT_TAG;
 
     uint16_t i = 0;
+    int ignore_crlf = 0;
+
     while (i < size){
         char c = packet[i++];
 
-        if (c == '\r' || c == '\n'){
-            line_complete();
-            continue;
+        if (ignore_crlf){
+            if (c == '\r' || c == '\n') continue;
+            ignore_crlf = 0;
         }
-        if (c == ':'){
-            tag_parsed();
-            continue;
-        }
-        
+
         switch (parser.state){
-            case MAP_MESSAGE_VALUE:
-                parser.message.message[parser.offset++] = c;
+            case MAP_MESSAGE_EXPECT_TAG:
+                if (c == ':') {
+                    tag_parsed();
+                } else {
+                    // truncate parser item
+                    if (parser.offset >= sizeof(parser.value) - 1) continue;
+                    // store
+                    parser.value[parser.offset++] = c;
+                }
                 break;
-            case MAP_MESSAGE_FEATURE_VALUE_FOUND:
+
+            case MAP_MESSAGE_FEATURE_VALUE_IGNORE:
+                if (c == '\r' || c == '\n'){
+                    reset_buffer();
+                    parser.state = MAP_MESSAGE_EXPECT_TAG;
+                    ignore_crlf = 1;
+                }
+                break;
+
+            case MAP_MESSAGE_BEGIN_TAG:
+            case MAP_MESSAGE_END_TAG:
+                if (c == '\r' || c == '\n'){
+                    line_complete();
+                    ignore_crlf = 1;
+                    break;
+                }
+
                 // truncate parser item
                 if (parser.offset >= sizeof(parser.value) - 1) continue;
-                // skip spaces
-                if (c == ' ') break;
-                
+                parser.value[parser.offset++] = c;
+                break;
+
+            case MAP_MESSAGE_FEATURE_VALUE_FOUND:
+                if (c == '\r' || c == '\n'){
+                    line_complete();
+                    ignore_crlf = 1;
+                    break;
+                }
+
                 switch (parser.tag_id){
                     case MAP_MESSAGE_FEATURE_VALUE_FIRST_NAME:
+                        if (parser.offset >= sizeof(parser.message.first_name) - 1) continue;
                         parser.message.first_name[parser.offset++] = c;
                         break;
                     case MAP_MESSAGE_FEATURE_VALUE_LAST_NAME:
+                        if (parser.offset >= sizeof(parser.message.last_name) - 1) continue;
                         parser.message.last_name[parser.offset++] = c;
                         break;
                     case MAP_MESSAGE_FEATURE_VALUE_PHONE:
+                        if (parser.offset >= sizeof(parser.message.phone) - 1) continue;
                         parser.message.phone[parser.offset++] = c;
                         break;
                     case MAP_MESSAGE_FEATURE_VALUE_CHARSET:
-                        // truncate parser item
                         if (parser.offset >= sizeof(parser.message.charset) - 1) continue;
                         parser.message.charset[parser.offset++] = c;
                         break;
                     default:
-                        parser.value[parser.offset++] = c;
                         break;
                 }
                 break;
-            default:
+
+            case MAP_MESSAGE_VALUE:
+                // detect end of message
+                if (strncmp(&parser.message.message[parser.offset-9], "END:MSG\r\n", 9) == 0){
+                    parser.offset -= 9;
+                    parser.message.message[parser.offset] = 0;
+                    parser.state = MAP_MESSAGE_EXPECT_TAG;
+                    reset_buffer();
+                    break;
+                }
                 // truncate parser item
-                if (parser.offset >= sizeof(parser.value) - 1) continue;
-                // skip spaces
-                if (c == ' ') break;
-                parser.value[parser.offset++] = c;
+                if (parser.offset >= sizeof(parser.message.message) - 1) break;
+                parser.message.message[parser.offset++] = c;
+                break;
+            default:
+                printf("State %x not handled\n", parser.state);
                 break;
         }
     }
@@ -210,27 +258,32 @@ static void map_access_client_process_message(const uint8_t *packet, uint16_t si
 }
 
 const static char * message = 
-"BEGIN:BMSG\n"
-"VERSION:1.0\n"
-"STATUS:UNREAD\n"
-"TYPE:SMS_GSM\n"
-"FOLDER:telecom/msg/INBOX\n"
-"BEGIN:VCARD\n"
-"VERSION:3.0\n"
-"FN:\n"
-"N:\n"
-"TEL:Swisscom\n"
-"END:VCARD\n"
-"BEGIN:BENV\n"
-"BEGIN:BBODY\n"
-"CHARSET:UTF-8\n"
-"LENGTH:172\n"
-"BEGIN:MSG\n"
-"Lieber Kunde. Information und Hilfe zur Inbetriebnahme Ihres Mobiltelefons haben wir unter www.swisscom.ch/handy-einrichten für Sie zusammengestellt.\n"
-"END:MSG\n"
-"END:BBODY\n"
-"END:BENV\n"
-"END:BMSG\n";
+"BEGIN:BMSG\r\n"
+"VERSION:1.0\r\n"
+"STATUS:UNREAD\r\n"
+"TYPE:SMS_GSM\r\n"
+"FOLDER:telecom/msg/INBOX\r\n"
+"BEGIN:VCARD\r\n"
+"VERSION:3.0\r\n"
+"FN:\r\n"
+"N:\r\n"
+"TEL:Swisscom\r\n"
+"END:VCARD\r\n"
+"BEGIN:BENV\r\n"
+"BEGIN:BBODY\r\n"
+"CHARSET:UTF-8\r\n"
+"LENGTH:230\r\n"
+"BEGIN:MSG\r\n"
+"Lieber Kunde.\n"
+"\n"
+"Information und Hilfe zur Inbetriebnahme Ihres Mobiltelefons haben wir unter www.swisscom.ch/handy-einrichten für Sie zusammengestellt.\n"
+"\n"
+"Und noch spezielle Zeichen š ś ç ć č und emojis 👍😎😺😀💋\n"
+"\n"
+"END:MSG\r\n"
+"END:BBODY\r\n"
+"END:BENV\r\n"
+"END:BMSG\r\n";
 
 
 TEST_GROUP(MAP_XML){
