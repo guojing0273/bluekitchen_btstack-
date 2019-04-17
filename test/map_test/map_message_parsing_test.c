@@ -80,12 +80,16 @@ static void reset_buffer(void){
     parser.offset = 0;
 }
 
+static void append_char(char c, char * buffer, uint16_t buffer_len){
+    // truncate parser item
+    if (parser.offset >= buffer_len - 1) return;
+    // store
+    buffer[parser.offset++] = c;
+}
+
 static void line_complete(void){
     // printf("line complete, state %x\n", parser.state);
     switch (parser.state){
-        case MAP_MESSAGE_VALUE:
-            parser.message.message[parser.offset++] = '\n';
-            return;
         case MAP_MESSAGE_FEATURE_VALUE_FOUND:
             parser.value[parser.offset++] = 0;
             // process feature
@@ -103,6 +107,7 @@ static void line_complete(void){
                     }
                     break;
                 case MAP_MESSAGE_FEATURE_VALUE_STATUS:
+                    printf("status %s \n", parser.value);
                     parser.message.status = MAP_MESSAGE_STATUS_UNKNOWN;
                     if (strcmp(parser.value, "UNREAD") == 0){
                         parser.message.status = MAP_MESSAGE_STATUS_UNREAD;
@@ -117,19 +122,14 @@ static void line_complete(void){
             break;
         
         case MAP_MESSAGE_BEGIN_TAG:
+            parser.value[parser.offset++] = 0;
             if (strcmp(parser.value, "MSG") == 0){
                 parser.state = MAP_MESSAGE_VALUE;
             } else {
                 parser.state = MAP_MESSAGE_EXPECT_TAG;
             }
             break;
-        case MAP_MESSAGE_END_TAG:
-            if (strcmp(parser.value, "MSG") == 0){
-                parser.state = MAP_MESSAGE_EXPECT_TAG;
-            } else {
-                parser.state = MAP_MESSAGE_EXPECT_TAG;
-            }
-            break;
+        
         default:
             parser.state = MAP_MESSAGE_EXPECT_TAG;
             break;
@@ -178,18 +178,14 @@ static void map_access_client_process_message(const uint8_t *packet, uint16_t si
             case MAP_MESSAGE_EXPECT_TAG:
                 if (c == ':') {
                     tag_parsed();
-                } else {
-                    // truncate parser item
-                    if (parser.offset >= sizeof(parser.value) - 1) continue;
-                    // store
-                    parser.value[parser.offset++] = c;
+                    break;
                 }
+                append_char(c, parser.value, sizeof(parser.value));
                 break;
 
             case MAP_MESSAGE_FEATURE_VALUE_IGNORE:
                 if (c == '\r' || c == '\n'){
-                    reset_buffer();
-                    parser.state = MAP_MESSAGE_EXPECT_TAG;
+                    line_complete();
                     ignore_crlf = 1;
                 }
                 break;
@@ -201,10 +197,7 @@ static void map_access_client_process_message(const uint8_t *packet, uint16_t si
                     ignore_crlf = 1;
                     break;
                 }
-
-                // truncate parser item
-                if (parser.offset >= sizeof(parser.value) - 1) continue;
-                parser.value[parser.offset++] = c;
+                append_char(c, parser.value, sizeof(parser.value));
                 break;
 
             case MAP_MESSAGE_FEATURE_VALUE_FOUND:
@@ -216,22 +209,19 @@ static void map_access_client_process_message(const uint8_t *packet, uint16_t si
 
                 switch (parser.tag_id){
                     case MAP_MESSAGE_FEATURE_VALUE_FIRST_NAME:
-                        if (parser.offset >= sizeof(parser.message.first_name) - 1) continue;
-                        parser.message.first_name[parser.offset++] = c;
-                        break;
+                        append_char(c, parser.message.first_name, sizeof(parser.message.first_name));
+                         break;
                     case MAP_MESSAGE_FEATURE_VALUE_LAST_NAME:
-                        if (parser.offset >= sizeof(parser.message.last_name) - 1) continue;
-                        parser.message.last_name[parser.offset++] = c;
+                        append_char(c, parser.message.last_name, sizeof(parser.message.last_name));
                         break;
                     case MAP_MESSAGE_FEATURE_VALUE_PHONE:
-                        if (parser.offset >= sizeof(parser.message.phone) - 1) continue;
-                        parser.message.phone[parser.offset++] = c;
+                        append_char(c, parser.message.phone, sizeof(parser.message.phone));
                         break;
                     case MAP_MESSAGE_FEATURE_VALUE_CHARSET:
-                        if (parser.offset >= sizeof(parser.message.charset) - 1) continue;
-                        parser.message.charset[parser.offset++] = c;
+                        append_char(c, parser.message.charset, sizeof(parser.message.charset));
                         break;
                     default:
+                        append_char(c, parser.value, sizeof(parser.value));
                         break;
                 }
                 break;
@@ -245,9 +235,7 @@ static void map_access_client_process_message(const uint8_t *packet, uint16_t si
                     reset_buffer();
                     break;
                 }
-                // truncate parser item
-                if (parser.offset >= sizeof(parser.message.message) - 1) break;
-                parser.message.message[parser.offset++] = c;
+                append_char(c, parser.message.message, sizeof(parser.message.message));
                 break;
             default:
                 printf("State %x not handled\n", parser.state);
@@ -285,6 +273,13 @@ const static char * message =
 "END:BENV\r\n"
 "END:BMSG\r\n";
 
+const static char * expected_message = 
+"Lieber Kunde.\n"
+"\n"
+"Information und Hilfe zur Inbetriebnahme Ihres Mobiltelefons haben wir unter www.swisscom.ch/handy-einrichten für Sie zusammengestellt.\n"
+"\n"
+"Und noch spezielle Zeichen š ś ç ć č und emojis 👍😎😺😀💋\n"
+"\n";
 
 TEST_GROUP(MAP_XML){
     void setup(void){
@@ -293,6 +288,9 @@ TEST_GROUP(MAP_XML){
 
 TEST(MAP_XML, Folders){
     map_access_client_process_message((const uint8_t *) message, strlen(message));
+    CHECK_EQUAL(MAP_MESSAGE_STATUS_UNREAD, parser.message.status);
+    CHECK_EQUAL(MAP_MESSAGE_TYPE_SMS_GSM, parser.message.type);
+    STRCMP_EQUAL(expected_message, parser.message.message);
 }
 
 

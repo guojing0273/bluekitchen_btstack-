@@ -75,17 +75,17 @@ typedef struct {
 } map_connection_t;
 
 typedef enum {
-    MAP_MESSAGE_TYPE_UNKNOWN = 0,
-    MAP_MESSAGE_TYPE_EMAIL,
+    MAP_MESSAGE_TYPE_EMAIL = 0,
     MAP_MESSAGE_TYPE_SMS_GSM,
     MAP_MESSAGE_TYPE_SMS_CDMA,
-    MAP_MESSAGE_TYPE_MMS
+    MAP_MESSAGE_TYPE_MMS,
+    MAP_MESSAGE_TYPE_UNKNOWN
 } map_message_type_t;
 
 typedef enum {
-    MAP_MESSAGE_STATUS_UNKNOWN = 0,
-    MAP_MESSAGE_STATUS_UNREAD,
-    MAP_MESSAGE_STATUS_READ
+    MAP_MESSAGE_STATUS_UNREAD = 0,
+    MAP_MESSAGE_STATUS_READ,
+    MAP_MESSAGE_STATUS_UNKNOWN
 } map_message_status_t;
 
 typedef enum {
