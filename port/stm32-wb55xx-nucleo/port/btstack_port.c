@@ -46,9 +46,11 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "btstack_config.h"
 #include "main.h"
 
 
+#ifndef ENABLE_SEGGER_RTT
 /********************************************
  *      system calls implementation
  *******************************************/
@@ -67,6 +69,7 @@ int _read(int file, char* ptr, int len)
 
     return len;
 }
+#endif
 
 /********************************************
  *      hal_time_ms.h implementation
