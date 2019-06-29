@@ -49,7 +49,6 @@
 #include "btstack_config.h"
 #include "main.h"
 
-
 #ifndef ENABLE_SEGGER_RTT
 /********************************************
  *      system calls implementation
@@ -148,7 +147,7 @@ PLACE_IN_SECTION("MB_MEM2") ALIGN(4) static uint8_t	HciAclDataBuffer[sizeof(TL_P
     
 static void (*transport_packet_handler)(uint8_t packet_type, uint8_t *packet, uint16_t size);
 
-static SemaphoreHandle_t C2StartedSem;
+static volatile int c2_started;
 static SemaphoreHandle_t shciSem;
 static QueueHandle_t hciEvtQueue;
 static int hci_acl_can_send_now;
@@ -267,17 +266,13 @@ static void ble_Init_and_start(void)
 
 static void sys_evt_received(void *pdata)
 {
-    static BaseType_t yield = pdFALSE;
-
     TL_EvtSerial_t* shciEvt = &((tSHCI_UserEvtRxParam*)pdata)->pckt->evtserial;
 
     if (shciEvt->evt.evtcode == SHCI_EVTCODE)
     {
         if (little_endian_read_16(shciEvt->evt.payload, 0) == SHCI_SUB_EVT_CODE_READY)
-            xSemaphoreGiveFromISR(C2StartedSem, &yield);
+            c2_started = 1;
     }
-
-    portYIELD_FROM_ISR(yield);
 }
 
 static void ble_evt_received(TL_EvtPacket_t *hcievt)
@@ -380,7 +375,6 @@ static void transport_init(const void *transport_config){
 	log_debug(" *BleSpareEvtBuffer     : 0x%08X", (void *)&BleSpareEvtBuffer);
 
     /**< FreeRTOS implementation variables initialization */
-    C2StartedSem = xSemaphoreCreateBinary();
     shciSem = xSemaphoreCreateBinary();
     hciEvtQueue = xQueueCreate(CFG_TLBLE_EVT_QUEUE_LENGTH, sizeof(TL_EvtPacket_t*));
     hci_acl_can_send_now = 1;
@@ -421,12 +415,12 @@ static void transport_init(const void *transport_config){
 static int transport_open(void){
     log_info("transport_open");
 
-	/* Device will let us know when it's ready */
-    xSemaphoreTake(C2StartedSem, portMAX_DELAY);
-	log_info("BLE stack on CPU 2 running");
-
-	ble_Init_and_start();
+    ble_Init_and_start();
+    /* Device will let us know when it's ready */
+    while (c2_started == 0);
     
+    log_info("BLE stack on CPU 2 running");
+
     return 0;
 }
 
