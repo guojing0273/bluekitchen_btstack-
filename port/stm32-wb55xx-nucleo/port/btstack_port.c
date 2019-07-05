@@ -149,7 +149,6 @@ static void (*transport_packet_handler)(uint8_t packet_type, uint8_t *packet, ui
 
 static volatile int c2_started;
 static SemaphoreHandle_t shciSem;
-static QueueHandle_t hciEvtQueue;
 static int hci_acl_can_send_now;
 
 // data source for integration with BTstack Runloop
@@ -192,7 +191,8 @@ void shci_cmd_resp_wait(uint32_t timeout)
 void shci_notify_asynch_evt(void* pdata)
 {
     UNUSED(pdata);
-	shci_user_evt_proc(); //TODO should not be called from isr context
+    btstack_run_loop_freertos_trigger_from_isr();
+	// shci_user_evt_proc(); //TODO should not be called from isr context
 }
 
 void ipcc_reset(void)
@@ -275,17 +275,6 @@ static void sys_evt_received(void *pdata)
     }
 }
 
-static void ble_evt_received(TL_EvtPacket_t *hcievt)
-{
-    static BaseType_t yield = pdFALSE;
-
-    xQueueSendFromISR(hciEvtQueue, (void*)&hcievt, &yield);
-
-    btstack_run_loop_freertos_trigger_from_isr();
-
-    portYIELD_FROM_ISR(yield);
-}
-
 static void ble_acl_acknowledged(void)
 {
     hci_acl_can_send_now = 1;
@@ -296,56 +285,52 @@ static void ble_acl_acknowledged(void)
 
 // run from main thread
 
+static void transport_send_hardware_error(uint8_t error_code){
+    uint8_t event[] = { HCI_EVENT_HARDWARE_ERROR, 1, error_code};
+    transport_packet_handler(HCI_EVENT_PACKET, &event[0], sizeof(event));
+}
+
+static void ble_evt_received(TL_EvtPacket_t *hcievt)
+{
+    TL_AclDataSerial_t *acl;
+    switch (hcievt->evtserial.type)
+    {
+        case HCI_EVENT_PACKET:
+            /* Send buffer to upper stack */
+            transport_packet_handler(
+                hcievt->evtserial.type,
+                (uint8_t*)&hcievt->evtserial.evt,
+                hcievt->evtserial.evt.plen+2);
+            break;
+
+        case HCI_ACL_DATA_PACKET:
+            acl = &(((TL_AclDataPacket_t *)hcievt)->AclDataSerial);
+            /* Send buffer to upper stack */
+            transport_packet_handler(
+                acl->type,
+                &((uint8_t*)acl)[1],
+                acl->length+4);
+            break;
+        
+        default:
+            transport_send_hardware_error(0x01);  // invalid HCI packet
+            break;
+    }
+    
+    /* Release buffer for memory manager */
+    TL_MM_EvtDone(hcievt);    
+}
+
 static void transport_notify_packet_send(void){
     // notify upper stack that it might be possible to send again
     uint8_t event[] = { HCI_EVENT_TRANSPORT_PACKET_SENT, 0};
     transport_packet_handler(HCI_EVENT_PACKET, &event[0], sizeof(event));
 }
 
-static void transport_send_hardware_error(uint8_t error_code){
-    uint8_t event[] = { HCI_EVENT_HARDWARE_ERROR, 1, error_code};
-    transport_packet_handler(HCI_EVENT_PACKET, &event[0], sizeof(event));
-}
-
-static void transport_deliver_hci_packets(void){
-    TL_EvtPacket_t *hcievt;
-	TL_AclDataSerial_t *acl;
-
-    while (xQueueReceive(hciEvtQueue, &hcievt, 0) == pdTRUE)
-    {
-        switch (hcievt->evtserial.type)
-        {
-            case HCI_EVENT_PACKET:
-                /* Send buffer to upper stack */
-                transport_packet_handler(
-                    hcievt->evtserial.type,
-                    (uint8_t*)&hcievt->evtserial.evt,
-                    hcievt->evtserial.evt.plen+2);
-                break;
-
-            case HCI_ACL_DATA_PACKET:
-		        acl = &(((TL_AclDataPacket_t *)hcievt)->AclDataSerial);
-                /* Send buffer to upper stack */
-                transport_packet_handler(
-                    acl->type,
-                    &((uint8_t*)acl)[1],
-                    acl->length+4);
-                break;
-            
-            default:
-                transport_send_hardware_error(0x01);  // invalid HCI packet
-                break;
-        }
-        
-        /* Release buffer for memory manager */
-        TL_MM_EvtDone(hcievt);
-    }
-}
-
 static void transport_process(btstack_data_source_t *ds, btstack_data_source_callback_type_t callback_type) {
     switch (callback_type){
         case DATA_SOURCE_CALLBACK_POLL:
-            transport_deliver_hci_packets();
+            shci_user_evt_proc();
             break;
         default:
             break;
@@ -363,6 +348,11 @@ static void transport_init(const void *transport_config){
 
     log_info("transport_init");
 
+    // set up polling data_source
+    btstack_run_loop_set_data_source_handler(&transport_data_source, &transport_process);
+    btstack_run_loop_enable_data_source_callbacks(&transport_data_source, DATA_SOURCE_CALLBACK_POLL);
+    btstack_run_loop_add_data_source(&transport_data_source);
+
 	/* Take BLE out of reset */
 	ipcc_reset();
 
@@ -376,7 +366,6 @@ static void transport_init(const void *transport_config){
 
     /**< FreeRTOS implementation variables initialization */
     shciSem = xSemaphoreCreateBinary();
-    hciEvtQueue = xQueueCreate(CFG_TLBLE_EVT_QUEUE_LENGTH, sizeof(TL_EvtPacket_t*));
     hci_acl_can_send_now = 1;
 
 	/**< Reference table initialization */
@@ -402,11 +391,6 @@ static void transport_init(const void *transport_config){
 	tl_ble_config.IoBusEvtCallBack = ble_evt_received;
 	tl_ble_config.IoBusAclDataTxAck = ble_acl_acknowledged;
 	TL_BLE_Init((void *)&tl_ble_config);
-
-    // set up polling data_source
-    btstack_run_loop_set_data_source_handler(&transport_data_source, &transport_process);
-    btstack_run_loop_enable_data_source_callbacks(&transport_data_source, DATA_SOURCE_CALLBACK_POLL);
-    btstack_run_loop_add_data_source(&transport_data_source);
 }
 
 /**
@@ -416,8 +400,11 @@ static int transport_open(void){
     log_info("transport_open");
 
     ble_Init_and_start();
-    /* Device will let us know when it's ready */
-    while (c2_started == 0);
+
+    /* Device will let us know when it's ready - we poll it for now */
+    while (c2_started == 0){
+        shci_user_evt_proc();
+    }
     
     log_info("BLE stack on CPU 2 running");
 
