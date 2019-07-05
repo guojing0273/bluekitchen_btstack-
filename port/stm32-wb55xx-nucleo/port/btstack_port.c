@@ -267,7 +267,14 @@ static void ble_Init_and_start(void)
 
 static void sys_evt_received(void *pdata)
 {
-    TL_EvtSerial_t* shciEvt = &((tSHCI_UserEvtRxParam*)pdata)->pckt->evtserial;
+    if  (pdata == NULL) return;
+
+    tSHCI_UserEvtRxParam * user_event = (tSHCI_UserEvtRxParam*)pdata;
+    TL_EvtPacket_t * evt_packet = user_event->pckt;
+
+    if (evt_packet == NULL) return;
+
+    TL_EvtSerial_t* shciEvt = &evt_packet->evtserial;
 
     if (shciEvt->evt.evtcode == SHCI_EVTCODE)
     {
@@ -405,7 +412,7 @@ static void transport_init(const void *transport_config){
 	TL_MM_Init(&tl_mm_config);
 
 	TL_Enable();
-    
+
 	/**< BLE channel initialization */
 	tl_ble_config.p_cmdbuffer = (uint8_t *)&BleCmdBuffer;
 	tl_ble_config.p_AclDataBuffer = HciAclDataBuffer;
@@ -426,7 +433,7 @@ static int transport_open(void){
     while (c2_started == 0){
         shci_user_evt_proc();
     }
-    
+
     log_info("BLE stack on CPU 2 running");
 
     return 0;
