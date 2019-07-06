@@ -63,7 +63,7 @@
 #define ENABLE_MICRO_ECC_P256
 //#define HAVE_UART_DMA_SET_FLOWCONTROL
 //#define ENABLE_LE_DATA_LENGTH_EXTENSION
-#define ENABLE_SEGGER_RTT
+// #define ENABLE_SEGGER_RTT
 
 
 // BTstack configuration. buffers, sizes, ...
