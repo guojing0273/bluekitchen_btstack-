@@ -156,7 +156,6 @@ typedef enum {
 
 static volatile cpu2_state_t cpu2_state = CPU2_STATE_RESET;
 
-static SemaphoreHandle_t shciSem;
 static QueueHandle_t hciEvtQueue;
 static int hci_acl_can_send_now;
 
@@ -180,25 +179,14 @@ static btstack_tlv_flash_bank_t btstack_tlv_flash_bank_context;
     #define HAL_FLASH_PAGE_1_ID     ( 119 )
 #endif
 
-void shci_cmd_resp_release(uint32_t flag)
-{
+/* Called for SHCI commands, we only send one ble intt */
+void shci_cmd_resp_release(uint32_t flag){
     UNUSED(flag);
-    
-    static BaseType_t yield = pdFALSE;
-
-    xSemaphoreGiveFromISR(shciSem, &yield);
-
-    portYIELD_FROM_ISR(yield);
 }
-
-void shci_cmd_resp_wait(uint32_t timeout)
-{
+void shci_cmd_resp_wait(uint32_t timeout){
     UNUSED(timeout);
-    xSemaphoreTake(shciSem, portMAX_DELAY);
 }
-
-void shci_notify_asynch_evt(void* pdata)
-{
+void shci_notify_asynch_evt(void* pdata){
     UNUSED(pdata);
     btstack_run_loop_freertos_trigger_from_isr();
 }
@@ -418,7 +406,6 @@ static void transport_init(const void *transport_config){
 	log_debug(" *BleSpareEvtBuffer     : 0x%08X", (void *)&BleSpareEvtBuffer);
 
     /**< FreeRTOS implementation variables initialization */
-    shciSem = xSemaphoreCreateBinary();
     hciEvtQueue = xQueueCreate(CFG_TLBLE_EVT_QUEUE_LENGTH, sizeof(TL_EvtPacket_t*));
     hci_acl_can_send_now = 1;
 
