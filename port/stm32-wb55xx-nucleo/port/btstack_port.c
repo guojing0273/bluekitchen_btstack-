@@ -147,7 +147,15 @@ PLACE_IN_SECTION("MB_MEM2") ALIGN(4) static uint8_t	HciAclDataBuffer[sizeof(TL_P
     
 static void (*transport_packet_handler)(uint8_t packet_type, uint8_t *packet, uint16_t size);
 
-static volatile int c2_started;
+typedef enum {
+    CPU2_STATE_RESET,
+    CPU2_STATE_WAIT_FOR_STARTED,
+    CPU2_STATE_W2_INIT_BLE,
+    CPU2_STATE_READY,
+} cpu2_state_t;
+
+static volatile cpu2_state_t cpu2_state = CPU2_STATE_RESET;
+
 static SemaphoreHandle_t shciSem;
 static QueueHandle_t hciEvtQueue;
 static int hci_acl_can_send_now;
@@ -193,7 +201,6 @@ void shci_notify_asynch_evt(void* pdata)
 {
     UNUSED(pdata);
     btstack_run_loop_freertos_trigger_from_isr();
-	// shci_user_evt_proc(); //TODO should not be called from isr context
 }
 
 void ipcc_reset(void)
@@ -233,7 +240,7 @@ void ipcc_reset(void)
 }
 
 // VHCI callbacks, run from VHCI Task "BT Controller"
-static void ble_Init_and_start(void)
+static void ble_init_and_start(void)
 {
     SHCI_CmdStatus_t st;
 	SHCI_C2_Ble_Init_Cmd_Packet_t ble_init_cmd_packet = {
@@ -276,10 +283,14 @@ static void sys_evt_received(void *pdata)
 
     TL_EvtSerial_t* shciEvt = &evt_packet->evtserial;
 
-    if (shciEvt->evt.evtcode == SHCI_EVTCODE)
-    {
-        if (little_endian_read_16(shciEvt->evt.payload, 0) == SHCI_SUB_EVT_CODE_READY)
-            c2_started = 1;
+    if (shciEvt->evt.evtcode == SHCI_EVTCODE) {
+        if (little_endian_read_16(shciEvt->evt.payload, 0) == SHCI_SUB_EVT_CODE_READY) {
+            if (cpu2_state == CPU2_STATE_WAIT_FOR_STARTED){
+                cpu2_state = CPU2_STATE_W2_INIT_BLE;
+                btstack_run_loop_freertos_trigger_from_isr();
+                portYIELD_FROM_ISR(pdTRUE);
+            }
+        }
     }
 }
 
@@ -315,12 +326,15 @@ static void transport_notify_packet_send(void){
     transport_packet_handler(HCI_EVENT_PACKET, &event[0], sizeof(event));
 }
 
+static void transport_notify_ready(void){
+    // notify upper stack that it transport is ready
+    uint8_t event[] = { HCI_EVENT_TRANSPORT_READY, 0};
+    transport_packet_handler(HCI_EVENT_PACKET, &event[0], sizeof(event));
+}
+
 static void transport_deliver_hci_packets(void){
     TL_EvtPacket_t *hcievt;
     TL_AclDataSerial_t *acl;
-
-    // poll system bus
-    shci_user_evt_proc();
 
     // process hci packets
     while (xQueueReceive(hciEvtQueue, &hcievt, 0) == pdTRUE)
@@ -357,6 +371,16 @@ static void transport_deliver_hci_packets(void){
 static void transport_process(btstack_data_source_t *ds, btstack_data_source_callback_type_t callback_type) {
     switch (callback_type){
         case DATA_SOURCE_CALLBACK_POLL:
+            // poll system bus
+            shci_user_evt_proc();
+            // start BLE
+            if (cpu2_state == CPU2_STATE_W2_INIT_BLE){
+                log_info("CPU2 started, configure BLE");
+                cpu2_state = CPU2_STATE_READY;
+                ble_init_and_start();
+                transport_notify_ready();
+            }
+            // process hci packets
             transport_deliver_hci_packets();
             break;
         default:
@@ -381,6 +405,8 @@ static void transport_init(const void *transport_config){
     btstack_run_loop_add_data_source(&transport_data_source);
 
 	/* Take BLE out of reset */
+    cpu2_state = CPU2_STATE_WAIT_FOR_STARTED;
+
 	ipcc_reset();
 
 	log_debug("shared SRAM2 buffers");
@@ -426,16 +452,6 @@ static void transport_init(const void *transport_config){
  */
 static int transport_open(void){
     log_info("transport_open");
-
-    ble_Init_and_start();
-
-    /* Device will let us know when it's ready - we poll it for now */
-    while (c2_started == 0){
-        shci_user_evt_proc();
-    }
-
-    log_info("BLE stack on CPU 2 running");
-
     return 0;
 }
 
@@ -460,6 +476,7 @@ static void transport_register_packet_handler(void (*handler)(uint8_t packet_typ
  * support async transport layers, e.g. IRQ driven without buffers
  */
 static int transport_can_send_packet_now(uint8_t packet_type) {
+    if (cpu2_state != CPU2_STATE_READY) return 0;
     switch (packet_type)
     {
         case HCI_COMMAND_DATA_PACKET:
