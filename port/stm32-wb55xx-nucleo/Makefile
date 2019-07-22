@@ -230,18 +230,18 @@ EXAMPLES = 					\
 	gatt_browser            \
 	hog_keyboard_demo       \
 	hog_mouse_demo          \
-	le_counter              \
-	le_streamer				\
+	gatt_counter            \
+	gatt_streamer_server    \
 	le_streamer_client      \
 	sm_pairing_central      \
 	sm_pairing_peripheral   \
 
 GATT_FILES = \
 	ancs_client_demo.gatt \
-	le_counter.gatt \
-	le_streamer.gatt \
+	gatt_counter.gatt \
 	gatt_browser.gatt \
 	gatt_battery_query.gatt \
+	gatt_streamer_server.gatt \
 	hog_keyboard_demo.gatt \
 	hog_mouse_demo.gatt \
 	sm_pairing_peripheral.gatt \
