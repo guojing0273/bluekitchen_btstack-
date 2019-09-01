@@ -246,8 +246,8 @@ GATT_FILES = \
 	hog_mouse_demo.gatt \
 	sm_pairing_peripheral.gatt \
 	sm_pairing_central.gatt \
-	spp_and_le_counter.gatt \
-	spp_and_le_streamer.gatt \
+	spp_and_gatt_counter.gatt \
+	spp_and_gatt_streamer.gatt \
 
 #######################################
 # build the application
