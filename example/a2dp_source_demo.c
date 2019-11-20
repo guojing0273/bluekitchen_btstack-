@@ -67,7 +67,7 @@
 #include "mods/mod.h"
 
 // logarithmic volume reduction, samples are divided by 2^x
-// #define VOLUME_REDUCTION 3
+#define VOLUME_REDUCTION 3
 // #undef  HAVE_BTSTACK_STDIN
 
 //#define AVRCP_BROWSING_ENABLED
@@ -191,13 +191,13 @@ static btstack_packet_callback_registration_t hci_event_callback_registration;
 // mac 2013:        static const char * device_addr_string = "84:38:35:65:d1:15";
 // phone 2013:      static const char * device_addr_string = "D8:BB:2C:DF:F0:F2";
 // Minijambox:      
-static const char * device_addr_string1 = "00:21:3C:AC:F7:38";
+static const char * device_addr_string2 = "00:21:3C:AC:F7:38";
 // Philips SHB9100: static const char * device_addr_string = "00:22:37:05:FD:E8";
 // RT-B6:           static const char * device_addr_string = "00:75:58:FF:C9:7D";
 // BT dongle:       static const char * device_addr_string = "00:1A:7D:DA:71:0A";
 // Sony MDR-ZX330BT static const char * device_addr_string = "00:18:09:28:50:18";
 // Panda (BM6)      
-// static const char * device_addr_string2 = "4F:3F:66:52:8B:E0";
+static const char * device_addr_string1 = "4F:3F:66:52:8B:E0";
 
 /* AVRCP Target context START */
 static const uint8_t subunit_info[] = {
@@ -267,7 +267,18 @@ static void avrcp_controller_packet_handler(uint8_t packet_type, uint16_t channe
 static void stdin_process(char cmd);
 #endif
 
-static a2dp_media_sending_context_t * get_media_tracker_by_a2dp_cid(uint16_t cid){
+
+static a2dp_media_sending_context_t * get_media_tracker_for_bd_addr(bd_addr_t bd_addr){
+    int i = 0;
+    for (i = 0; i < num_media_trackers; i++){
+        if (memcmp(media_trackers[i].device_addr, bd_addr, 6) == 0){
+            return &media_trackers[i];
+        }
+    }
+    return NULL;
+}
+
+static a2dp_media_sending_context_t * get_media_tracker_for_a2dp_cid(uint16_t cid){
     int i = 0;
     for (i = 0; i < num_media_trackers; i++){
         if (media_trackers[i].a2dp_cid == cid){
@@ -277,7 +288,7 @@ static a2dp_media_sending_context_t * get_media_tracker_by_a2dp_cid(uint16_t cid
     return NULL;
 }
 
-static a2dp_media_sending_context_t * get_media_tracker_by_avrcp_cid(uint16_t cid){
+static a2dp_media_sending_context_t * get_media_tracker_for_avrcp_cid(uint16_t cid){
     int i = 0;
     for (i = 0; i < num_media_trackers; i++){
         if (media_trackers[i].avrcp_cid == cid){
@@ -576,7 +587,7 @@ static void a2dp_source_packet_handler(uint8_t packet_type, uint16_t channel, ui
             status = a2dp_subevent_signaling_connection_established_get_status(packet);
             printf("A2DP Source: A2DP_SUBEVENT_SIGNALING_CONNECTION_ESTABLISHED cid 0x%02x, status %d found \n", cid, status);
 
-            media_tracker = get_media_tracker_by_a2dp_cid(cid);
+            media_tracker = get_media_tracker_for_a2dp_cid(cid);
             if (media_tracker == NULL){
                 printf("A2DP Source: No media tracker with cid 0x%02x found \n", cid);
                 break;   
@@ -592,7 +603,7 @@ static void a2dp_source_packet_handler(uint8_t packet_type, uint16_t channel, ui
 
          case A2DP_SUBEVENT_SIGNALING_MEDIA_CODEC_SBC_CONFIGURATION:{
             cid  = avdtp_subevent_signaling_media_codec_sbc_configuration_get_avdtp_cid(packet);
-            media_tracker = get_media_tracker_by_a2dp_cid(cid);
+            media_tracker = get_media_tracker_for_a2dp_cid(cid);
             if (media_tracker == NULL){
                 printf("A2DP Source: No media tracker with cid 0x%02x found \n", cid);
                 break;   
@@ -652,7 +663,7 @@ static void a2dp_source_packet_handler(uint8_t packet_type, uint16_t channel, ui
 
         case A2DP_SUBEVENT_SIGNALING_DELAY_REPORT:
             cid = avdtp_subevent_signaling_delay_report_get_avdtp_cid(packet);
-            media_tracker = get_media_tracker_by_a2dp_cid(cid);
+            media_tracker = get_media_tracker_for_a2dp_cid(cid);
             if (media_tracker == NULL){
                 printf("A2DP Source: No media tracker with cid 0x%02x found \n", cid);
                 break;   
@@ -665,7 +676,7 @@ static void a2dp_source_packet_handler(uint8_t packet_type, uint16_t channel, ui
        
         case A2DP_SUBEVENT_STREAM_ESTABLISHED:
             cid = a2dp_subevent_stream_established_get_a2dp_cid(packet);
-            media_tracker = get_media_tracker_by_a2dp_cid(cid);
+            media_tracker = get_media_tracker_for_a2dp_cid(cid);
             if (media_tracker == NULL){
                 printf("A2DP Source: No media tracker with cid 0x%02x found \n", cid);
                 break;   
@@ -694,7 +705,7 @@ static void a2dp_source_packet_handler(uint8_t packet_type, uint16_t channel, ui
 
         case A2DP_SUBEVENT_STREAM_RECONFIGURED:
             cid = a2dp_subevent_stream_reconfigured_get_a2dp_cid(packet);
-            media_tracker = get_media_tracker_by_a2dp_cid(cid);
+            media_tracker = get_media_tracker_for_a2dp_cid(cid);
             if (media_tracker == NULL){
                 printf("A2DP Source: No media tracker with cid 0x%02x found \n", cid);
                 break;   
@@ -708,9 +719,9 @@ static void a2dp_source_packet_handler(uint8_t packet_type, uint16_t channel, ui
 
         case A2DP_SUBEVENT_STREAM_STARTED:
             cid = a2dp_subevent_stream_started_get_a2dp_cid(packet);
-            media_tracker = get_media_tracker_by_a2dp_cid(cid);
+            media_tracker = get_media_tracker_for_a2dp_cid(cid);
             if (media_tracker == NULL){
-                printf("A2DP Source: No media tracker with cid 0x%02x found \n", cid);
+                printf("A2DP Source: STREAM_STARTED, No media tracker with cid 0x%02x found \n", cid);
                 break;   
             }
 
@@ -726,9 +737,9 @@ static void a2dp_source_packet_handler(uint8_t packet_type, uint16_t channel, ui
 
         case A2DP_SUBEVENT_STREAMING_CAN_SEND_MEDIA_PACKET_NOW:
             cid = a2dp_subevent_signaling_media_codec_sbc_configuration_get_a2dp_cid(packet);
-            media_tracker = get_media_tracker_by_a2dp_cid(cid);
+            media_tracker = get_media_tracker_for_a2dp_cid(cid);
             if (media_tracker == NULL){
-                printf("A2DP Source: No media tracker with cid 0x%02x found \n", cid);
+                printf("A2DP Source: CAN_SEND_MEDIA_PACKET_NOW, No media tracker with cid 0x%02x found \n", cid);
                 break;   
             }
             local_seid = a2dp_subevent_streaming_can_send_media_packet_now_get_local_seid(packet);
@@ -738,9 +749,9 @@ static void a2dp_source_packet_handler(uint8_t packet_type, uint16_t channel, ui
 
         case A2DP_SUBEVENT_STREAM_SUSPENDED:
             cid = a2dp_subevent_stream_suspended_get_a2dp_cid(packet);
-            media_tracker = get_media_tracker_by_a2dp_cid(cid);
+            media_tracker = get_media_tracker_for_a2dp_cid(cid);
             if (media_tracker == NULL){
-                printf("A2DP Source: No media tracker with cid 0x%02x found \n", cid);
+                printf("A2DP Source: STREAM_SUSPENDED, No media tracker with cid 0x%02x found \n", cid);
                 break;   
             }
 
@@ -756,9 +767,9 @@ static void a2dp_source_packet_handler(uint8_t packet_type, uint16_t channel, ui
 
         case A2DP_SUBEVENT_STREAM_RELEASED:
             cid = a2dp_subevent_stream_released_get_a2dp_cid(packet);
-            media_tracker = get_media_tracker_by_a2dp_cid(cid);
+            media_tracker = get_media_tracker_for_a2dp_cid(cid);
             if (media_tracker == NULL){
-                printf("A2DP Source: No media tracker with cid 0x%02x found \n", cid);
+                printf("A2DP Source: STREAM_RELEASED, No media tracker with cid 0x%02x found \n", cid);
                 break;   
             }
             local_seid = a2dp_subevent_stream_released_get_local_seid(packet);
@@ -779,9 +790,9 @@ static void a2dp_source_packet_handler(uint8_t packet_type, uint16_t channel, ui
             break;
         case A2DP_SUBEVENT_SIGNALING_CONNECTION_RELEASED:
             cid = a2dp_subevent_signaling_connection_released_get_a2dp_cid(packet);
-            media_tracker = get_media_tracker_by_a2dp_cid(cid);
+            media_tracker = get_media_tracker_for_a2dp_cid(cid);
             if (media_tracker == NULL){
-                printf("A2DP Source: No media tracker with cid 0x%02x found \n", cid);
+                printf("A2DP Source: CONNECTION_RELEASED, No media tracker with cid 0x%02x found \n", cid);
                 break;   
             }
 
@@ -799,7 +810,7 @@ static void a2dp_source_packet_handler(uint8_t packet_type, uint16_t channel, ui
 static void avrcp_target_packet_handler(uint8_t packet_type, uint16_t channel, uint8_t *packet, uint16_t size){
     UNUSED(channel);
     UNUSED(size);
-    bd_addr_t event_addr;
+    bd_addr_t address;
     uint16_t avrcp_cid;
     uint8_t  status = ERROR_CODE_SUCCESS;
     a2dp_media_sending_context_t * media_tracker;
@@ -809,13 +820,14 @@ static void avrcp_target_packet_handler(uint8_t packet_type, uint16_t channel, u
     
     switch (packet[2]){
         case AVRCP_SUBEVENT_CONNECTION_ESTABLISHED: {
+            avrcp_subevent_connection_established_get_bd_addr(packet, address);
             avrcp_cid = avrcp_subevent_connection_established_get_avrcp_cid(packet);
-            media_tracker = get_media_tracker_by_avrcp_cid(avrcp_cid);
+            media_tracker = get_media_tracker_for_bd_addr(address);
             if (media_tracker == NULL){
-                printf("A2DP Source: No media tracker with cid 0x%02x found \n", avrcp_cid);
+                printf("AVRCP Target: CONNECTION_ESTABLISHED No media tracker with cid 0x%02x found \n", avrcp_cid);
                 break;   
             }
-
+            media_tracker->avrcp_cid = avrcp_cid;
             // if (avrcp_cid != 0 && avrcp_cid != avrcp_cid) {
             //     printf("AVRCP Target: Connection failed, expected 0x%02X l2cap cid, received 0x%02X\n", avrcp_cid, avrcp_cid);
             //     return;
@@ -828,8 +840,8 @@ static void avrcp_target_packet_handler(uint8_t packet_type, uint16_t channel, u
                 return;
             }
             media_tracker->avrcp_cid = avrcp_cid;
-            avrcp_subevent_connection_established_get_bd_addr(packet, event_addr);
-            printf("AVRCP Target: Connected to %s, avrcp_cid 0x%02x\n", bd_addr_to_str(event_addr), avrcp_cid);
+            avrcp_subevent_connection_established_get_bd_addr(packet, address);
+            printf("AVRCP Target: Connected to %s, avrcp_cid 0x%02x\n", bd_addr_to_str(address), avrcp_cid);
             
             avrcp_target_set_now_playing_info(media_tracker->avrcp_cid, NULL, sizeof(tracks)/sizeof(avrcp_track_t));
             avrcp_target_set_unit_info(media_tracker->avrcp_cid, AVRCP_SUBUNIT_TYPE_AUDIO, company_id);
@@ -837,31 +849,37 @@ static void avrcp_target_packet_handler(uint8_t packet_type, uint16_t channel, u
             return;
         }
         case AVRCP_SUBEVENT_NOTIFICATION_VOLUME_CHANGED:
+            avrcp_cid = avrcp_subevent_notification_volume_changed_get_avrcp_cid(packet);
+            media_tracker = get_media_tracker_for_avrcp_cid(avrcp_cid);
+            if (media_tracker == NULL){
+                printf("AVRCP Target: VOLUME_CHANGED, No media tracker with cid 0x%02x found \n", avrcp_cid);
+                break;   
+            }
             printf("AVRCP Target: new volume %d\n", avrcp_subevent_notification_volume_changed_get_absolute_volume(packet));
             break;
         case AVRCP_SUBEVENT_EVENT_IDS_QUERY:
             avrcp_cid = avrcp_subevent_event_ids_query_get_avrcp_cid(packet);
-            media_tracker = get_media_tracker_by_avrcp_cid(avrcp_cid);
+            media_tracker = get_media_tracker_for_avrcp_cid(avrcp_cid);
             if (media_tracker == NULL){
-                printf("A2DP Source: No media tracker with cid 0x%02x found \n", avrcp_cid);
+                printf("AVRCP Target: EVENT_IDS, No media tracker with cid 0x%02x found \n", avrcp_cid);
                 break;   
             }
             status = avrcp_target_supported_events(media_tracker->avrcp_cid, events_num, events, sizeof(events));
             break;
         case AVRCP_SUBEVENT_COMPANY_IDS_QUERY:
             avrcp_cid = avrcp_subevent_company_ids_query_get_avrcp_cid(packet);
-            media_tracker = get_media_tracker_by_avrcp_cid(avrcp_cid);
+            media_tracker = get_media_tracker_for_avrcp_cid(avrcp_cid);
             if (media_tracker == NULL){
-                printf("A2DP Source: No media tracker with cid 0x%02x found \n", avrcp_cid);
+                printf("AVRCP Target: COMPANY_IDS, No media tracker with cid 0x%02x found \n", avrcp_cid);
                 break;   
             }
             status = avrcp_target_supported_companies(media_tracker->avrcp_cid, companies_num, companies, sizeof(companies));
             break;
         case AVRCP_SUBEVENT_PLAY_STATUS_QUERY:
             avrcp_cid = avrcp_subevent_play_status_query_get_avrcp_cid(packet);
-            media_tracker = get_media_tracker_by_avrcp_cid(avrcp_cid);
+            media_tracker = get_media_tracker_for_avrcp_cid(avrcp_cid);
             if (media_tracker == NULL){
-                printf("A2DP Source: No media tracker with cid 0x%02x found \n", avrcp_cid);
+                printf("AVRCP Target: PLAY_STATUS, No media tracker with cid 0x%02x found \n", avrcp_cid);
                 break;   
             }
             status = avrcp_target_play_status(media_tracker->avrcp_cid, play_info.song_length_ms, play_info.song_position_ms, play_info.status);            
@@ -871,9 +889,9 @@ static void avrcp_target_packet_handler(uint8_t packet_type, uint16_t channel, u
         //     break;
         case AVRCP_SUBEVENT_OPERATION:{
             avrcp_cid = avrcp_subevent_operation_get_avrcp_cid(packet);
-            media_tracker = get_media_tracker_by_avrcp_cid(avrcp_cid);
+            media_tracker = get_media_tracker_for_avrcp_cid(avrcp_cid);
             if (media_tracker == NULL){
-                printf("A2DP Source: No media tracker with cid 0x%02x found \n", avrcp_cid);
+                printf("AVRCP Target: OPERATION, No media tracker with cid 0x%02x found \n", avrcp_cid);
                 break;   
             }
             avrcp_operation_id_t operation_id = avrcp_subevent_operation_get_operation_id(packet);
@@ -898,9 +916,9 @@ static void avrcp_target_packet_handler(uint8_t packet_type, uint16_t channel, u
         }
         case AVRCP_SUBEVENT_CONNECTION_RELEASED:
             avrcp_cid = avrcp_subevent_connection_released_get_avrcp_cid(packet);
-            media_tracker = get_media_tracker_by_avrcp_cid(avrcp_cid);
+            media_tracker = get_media_tracker_for_avrcp_cid(avrcp_cid);
             if (media_tracker == NULL){
-                printf("A2DP Source: No media tracker with cid 0x%02x found \n", avrcp_cid);
+                printf("AVRCP Target: CONNECTION_RELEASED, No media tracker with cid 0x%02x found \n", avrcp_cid);
                 break;   
             }
             printf("AVRCP Target: Disconnected, avrcp_cid 0x%02x\n", avrcp_cid);
