@@ -72,7 +72,7 @@
 
 //#define AVRCP_BROWSING_ENABLED
 
-#define MAX_NUM_MULTI_SINKS              1
+#define MAX_NUM_MULTI_SINKS         10
 
 #define NUM_CHANNELS                2
 #define BYTES_PER_AUDIO_SAMPLE      (2*NUM_CHANNELS)
@@ -169,8 +169,6 @@ static btstack_sbc_encoder_state_t sbc_encoder_state;
 static uint8_t media_sbc_codec_configuration[4];
 static a2dp_media_sending_context_t media_trackers[MAX_NUM_MULTI_SINKS];
 static a2dp_media_sending_context_t * current_media_tracker = NULL;
-static uint16_t num_media_trackers = 0;
-
 
 static stream_data_source_t data_source;
 
@@ -270,7 +268,7 @@ static void stdin_process(char cmd);
 
 static a2dp_media_sending_context_t * get_media_tracker_for_bd_addr(bd_addr_t bd_addr){
     int i = 0;
-    for (i = 0; i < num_media_trackers; i++){
+    for (i = 0; i < MAX_NUM_MULTI_SINKS; i++){
         if (memcmp(media_trackers[i].device_addr, bd_addr, 6) == 0){
             return &media_trackers[i];
         }
@@ -280,7 +278,7 @@ static a2dp_media_sending_context_t * get_media_tracker_for_bd_addr(bd_addr_t bd
 
 static a2dp_media_sending_context_t * get_media_tracker_for_a2dp_cid(uint16_t cid){
     int i = 0;
-    for (i = 0; i < num_media_trackers; i++){
+    for (i = 0; i < MAX_NUM_MULTI_SINKS; i++){
         if (media_trackers[i].a2dp_cid == cid){
             return &media_trackers[i];
         }
@@ -290,7 +288,7 @@ static a2dp_media_sending_context_t * get_media_tracker_for_a2dp_cid(uint16_t ci
 
 static a2dp_media_sending_context_t * get_media_tracker_for_avrcp_cid(uint16_t cid){
     int i = 0;
-    for (i = 0; i < num_media_trackers; i++){
+    for (i = 0; i < MAX_NUM_MULTI_SINKS; i++){
         if (media_trackers[i].avrcp_cid == cid){
             return &media_trackers[i];
         }
@@ -314,23 +312,21 @@ static void a2dp_demo_reconfigure_sample_rate(int new_sample_rate, a2dp_media_se
     hxcmod_load(&mod_context, (void *) &mod_data, mod_len);
 }
 
-static void add_media_tracker_for_device(const char * device_addr_string){
-    if (num_media_trackers < MAX_NUM_MULTI_SINKS){
-        a2dp_media_sending_context_t * media_tracker = &media_trackers[num_media_trackers++];
-        
-        // Create stream endpoint.
-        avdtp_stream_endpoint_t * local_stream_endpoint = a2dp_source_create_stream_endpoint(AVDTP_AUDIO, AVDTP_CODEC_SBC, media_sbc_codec_capabilities, sizeof(media_sbc_codec_capabilities), media_sbc_codec_configuration, sizeof(media_sbc_codec_configuration));
-        if (!local_stream_endpoint){
-            printf("A2DP Source: not enough memory to create local stream endpoint\n");
-            return;
-        }
+static void setup_media_tracker_for_address(uint16_t index, const char * device_addr_string){
+    btstack_assert(index < MAX_NUM_MULTI_SINKS);
 
-        media_tracker->local_seid = avdtp_local_seid(local_stream_endpoint);
-        avdtp_source_register_delay_reporting_category(media_tracker->local_seid);
-        a2dp_demo_reconfigure_sample_rate(sample_rate, media_tracker);
-        sscanf_bd_addr(device_addr_string, media_tracker->device_addr);
-        current_media_tracker = media_tracker;
+    a2dp_media_sending_context_t * media_tracker = &media_trackers[index];
+    // Create stream endpoint.
+    avdtp_stream_endpoint_t * local_stream_endpoint = a2dp_source_create_stream_endpoint(AVDTP_AUDIO, AVDTP_CODEC_SBC, media_sbc_codec_capabilities, sizeof(media_sbc_codec_capabilities), media_sbc_codec_configuration, sizeof(media_sbc_codec_configuration));
+    if (!local_stream_endpoint){
+        printf("A2DP Source: not enough memory to create local stream endpoint\n");
+        return;
     }
+
+    media_tracker->local_seid = avdtp_local_seid(local_stream_endpoint);
+    avdtp_source_register_delay_reporting_category(media_tracker->local_seid);
+    a2dp_demo_reconfigure_sample_rate(sample_rate, media_tracker);
+    sscanf_bd_addr(device_addr_string, media_tracker->device_addr);
 }
 
 
@@ -382,9 +378,10 @@ static int a2dp_source_and_avrcp_services_init(void){
     hci_event_callback_registration.callback = &a2dp_source_packet_handler;
     hci_add_event_handler(&hci_event_callback_registration);
 
-    //todo sscanf_bd_addr(device_addr_string, device_addr);
-    add_media_tracker_for_device(device_addr_string1);
-    // add_media_tracker_for_device(device_addr_string2);
+    // setup media trackers
+    setup_media_tracker_for_address(0, device_addr_string1);
+    setup_media_tracker_for_address(1, device_addr_string2);
+    current_media_tracker = &media_trackers[0];
 
 #ifdef HAVE_BTSTACK_STDIN
     btstack_stdin_setup(stdin_process);
@@ -1022,11 +1019,11 @@ static void stdin_process(char cmd){
     switch (cmd){
         case '1':
             current_media_tracker = &media_trackers[0];
-            printf("select SINK with addr %s\n",  bd_addr_to_str(current_media_tracker->device_addr));
+            printf("Select SINK device with addr %s\n",  bd_addr_to_str(current_media_tracker->device_addr));
             break;
         case '2':
             current_media_tracker = &media_trackers[1];
-            printf("select SINK with addr %s\n",  bd_addr_to_str(current_media_tracker->device_addr));
+            printf("Select SINK device with addr %s\n",  bd_addr_to_str(current_media_tracker->device_addr));
             break;
         
         case 'b':
