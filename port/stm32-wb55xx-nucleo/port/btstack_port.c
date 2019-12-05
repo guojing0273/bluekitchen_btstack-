@@ -57,7 +57,17 @@ extern UART_HandleTypeDef hTuart;
 
 int _write(int file, char* ptr, int len)
 {
-    HAL_UART_Transmit(&hTuart, (uint8_t*)ptr, len, 1000);
+    // expand '/n' to '/r/n'
+    int pos;
+    for (pos=0;pos<len;pos++){
+        uint8_t next_char = *ptr++;
+        if (next_char == '\n'){
+            const uint8_t NEWLINE[] = "\r\n";
+            HAL_UART_Transmit(&hTuart, (uint8_t*) &NEWLINE[0], 2, HAL_MAX_DELAY);
+        } else {
+            HAL_UART_Transmit(&hTuart, &next_char, 1, HAL_MAX_DELAY);
+        }
+    }
 
     return len;
 }
