@@ -114,7 +114,7 @@ void hal_cpu_enable_irqs_and_sleep(void){
  *       transport implementation
  ******************************************/
 
-#define USE_SRAM_FLASH_BANK_EMU
+// #define USE_SRAM_FLASH_BANK_EMU
 
 #include "btstack.h"
 #include "btstack_config.h"
@@ -536,32 +536,7 @@ static const hci_transport_t * transport_get_instance(void){
 
 static btstack_packet_callback_registration_t hci_event_callback_registration;
 
-static void packet_handler (uint8_t packet_type, uint16_t channel, uint8_t *packet, uint16_t size){
-    if (packet_type != HCI_EVENT_PACKET) return;
-    switch(hci_event_packet_get_type(packet)){
-        case BTSTACK_EVENT_STATE:
-            if (btstack_event_state_get_state(packet) != HCI_STATE_WORKING) return;
-            log_info("BTstack: up and running.");
-            break;
-        default:
-            break;
-    }
-}
-
-extern int btstack_main(int argc, const char * argv[]);
-void port_thread(void* args){
-
-    // enable packet logger
-#ifdef ENABLE_HCI_DUMP
-    hci_dump_open(NULL, HCI_DUMP_STDOUT);
-#endif
-    /// GET STARTED with BTstack ///
-    btstack_memory_init();
-    btstack_run_loop_init(btstack_run_loop_freertos_get_instance());
-
-    // init HCI
-    hci_init(transport_get_instance(), NULL);
-
+static void setup_dbs(void){
     // setup Link Key DB
 #ifdef USE_SRAM_FLASH_BANK_EMU
     const hal_flash_bank_t * hal_flash_bank_impl = hal_flash_bank_memory_init_instance(
@@ -583,6 +558,34 @@ void port_thread(void* args){
 
     // setup global tlv
     le_device_db_tlv_configure(btstack_tlv_impl, &btstack_tlv_flash_bank_context);
+}
+
+static void packet_handler (uint8_t packet_type, uint16_t channel, uint8_t *packet, uint16_t size){
+    if (packet_type != HCI_EVENT_PACKET) return;
+    switch(hci_event_packet_get_type(packet)){
+        case BTSTACK_EVENT_STATE:
+            if (btstack_event_state_get_state(packet) != HCI_STATE_WORKING) return;
+            setup_dbs();
+            log_info("BTstack: up and running.");
+            break;
+        default:
+            break;
+    }
+}
+
+extern int btstack_main(int argc, const char * argv[]);
+void port_thread(void* args){
+
+    // enable packet logger
+#ifdef ENABLE_HCI_DUMP
+    hci_dump_open(NULL, HCI_DUMP_STDOUT);
+#endif
+    /// GET STARTED with BTstack ///
+    btstack_memory_init();
+    btstack_run_loop_init(btstack_run_loop_freertos_get_instance());
+
+    // init HCI
+    hci_init(transport_get_instance(), NULL);
     
     // inform about BTstack state
     hci_event_callback_registration.callback = &packet_handler;
