@@ -41,6 +41,7 @@ VPATH += ${BTSTACK_ROOT}/example
 # C sources
 C_SOURCES =  \
 ${BTSTACK_ROOT}/3rd-party/micro-ecc/uECC.c \
+${BTSTACK_ROOT}/3rd-party/rijndael/rijndael.c \
 ${BTSTACK_ROOT}/3rd-party/segger-rtt/SEGGER_RTT.c \
 ${BTSTACK_ROOT}/3rd-party/segger-rtt/SEGGER_RTT_Syscalls_GCC.c \
 ${BTSTACK_ROOT}/platform/freertos/btstack_run_loop_freertos.c \
@@ -191,6 +192,7 @@ C_INCLUDES += -I${BTSTACK_ROOT}/src/ble
 C_INCLUDES += -I${BTSTACK_ROOT}/src/ble/gatt-service
 C_INCLUDES += -I${BTSTACK_ROOT}/src
 C_INCLUDES += -I${BTSTACK_ROOT}/3rd-party/micro-ecc
+C_INCLUDES += -I${BTSTACK_ROOT}/3rd-party/rijndael
 C_INCLUDES += -I${BTSTACK_ROOT}/3rd-party/segger-rtt
 C_INCLUDES += -I${BTSTACK_ROOT}/platform/embedded
 C_INCLUDES += -I${BTSTACK_ROOT}/platform/freertos

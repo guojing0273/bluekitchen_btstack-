@@ -64,7 +64,7 @@
 //#define HAVE_UART_DMA_SET_FLOWCONTROL
 //#define ENABLE_LE_DATA_LENGTH_EXTENSION
 // #define ENABLE_SEGGER_RTT
-
+#define ENABLE_SOFTWARE_AES128
 
 // BTstack configuration. buffers, sizes, ...
 #define HCI_ACL_PAYLOAD_SIZE (512 + 4) //Max official att size + l2cap header size
