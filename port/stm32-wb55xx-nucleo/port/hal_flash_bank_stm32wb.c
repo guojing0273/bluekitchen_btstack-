@@ -99,7 +99,7 @@ static void hal_flash_bank_stm32wb_read(void * context, int bank, uint32_t offse
 	if (offset > self->page_size) return;
 	if ((offset + size) > self->page_size) return;
 
-	memcpy(buffer, ((uint8_t *) (FLASH_BASE + (self->page[bank] * self->page_size))) + offset, size);
+	memcpy(buffer, (uint8_t *) (FLASH_BASE + self->page[bank] + offset), size);
 }
 
 static void hal_flash_bank_stm32wb_write(void * context, int bank, uint32_t offset, const uint8_t * data, uint32_t size){
@@ -115,7 +115,7 @@ static void hal_flash_bank_stm32wb_write(void * context, int bank, uint32_t offs
 	unsigned int i;
 	HAL_FLASH_Unlock();
 	for (i=0;i<size;i+=STM32WB_FLASH_ALIGNMENT){
-		HAL_FLASH_Program(FLASH_TYPEPROGRAM_DOUBLEWORD, (FLASH_BASE + (self->page[bank] * self->page_size)) + offset + i, LITTLE_TO_64(data, i));
+		HAL_FLASH_Program(FLASH_TYPEPROGRAM_DOUBLEWORD, FLASH_BASE + self->page[bank] + offset + i, LITTLE_TO_64(data, i));
 	}
 	HAL_FLASH_Lock();
 
@@ -134,7 +134,7 @@ static const hal_flash_bank_t hal_flash_bank_stm32wb_impl = {
 const hal_flash_bank_t * hal_flash_bank_stm32wb_init_instance(hal_flash_bank_stm32wb_t * context, uint32_t page_size,
 		uint32_t bank_0_page_id, uint32_t bank_1_page_id){
 	context->page_size = page_size;
-	context->page[0] = bank_0_page_id;
-	context->page[1] = bank_1_page_id;
+	context->page[0] = bank_0_page_id * page_size;
+	context->page[1] = bank_1_page_id * page_size;
 	return &hal_flash_bank_stm32wb_impl;
 }
