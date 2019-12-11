@@ -182,11 +182,14 @@ static btstack_tlv_flash_bank_t btstack_tlv_flash_bank_context;
 #else
     static hal_flash_bank_stm32wb_t   hal_flash_bank_context;
 
-    // Wireless BLE stack fw is starting at 0x080CC000 corresponding
-    // to page 204, taking page 202 and 203 is at end of user flash
+    // Flash Configuration:
+    // - Flash page size 0x1000
+    // - Flash starts at 0x08000000
+    // - Wireless BLE stack fw is starting at 0x080CB000 (offset 0xCB000) -> page 203
+    // - 0xCB000 is page 203, using page 201 and 202
     #define HAL_FLASH_PAGE_SIZE     ( FLASH_PAGE_SIZE )
-    #define HAL_FLASH_PAGE_0_ID     ( 118 )
-    #define HAL_FLASH_PAGE_1_ID     ( 119 )
+    #define HAL_FLASH_PAGE_0_ID     ( 201 )
+    #define HAL_FLASH_PAGE_1_ID     ( 202 )
 #endif
 
 /* Called for SHCI commands, we only send one ble intt */
@@ -337,7 +340,7 @@ static void transport_deliver_hci_packets(void){
     // process hci packets
     while (xQueueReceive(hciEvtQueue, &hcievt, 0) == pdTRUE)
     {
-        log_error(" Event buffer address : %d", hcievt);
+        log_info("Packet address: %x", hcievt);
         switch (hcievt->evtserial.type)
         {
             case HCI_EVENT_PACKET:
@@ -458,7 +461,6 @@ static int transport_open(void){
  */
 static int transport_close(void){
     log_info("transport_close");
-
     return 0;
 }
 
