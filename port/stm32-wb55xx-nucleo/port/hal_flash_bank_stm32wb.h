@@ -48,7 +48,8 @@ extern "C" {
 
 typedef struct {
 	uint32_t   page_size;
-	uint32_t   page[2];
+	uint32_t   page_start[2];
+	uint16_t   page_index[2];
 } hal_flash_bank_stm32wb_t;
 
 /**
