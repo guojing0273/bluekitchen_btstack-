@@ -539,7 +539,7 @@ static const hci_transport_t * transport_get_instance(void){
 static btstack_packet_callback_registration_t hci_event_callback_registration;
 
 static void setup_dbs(void){
-    // setup Link Key DB
+
 #ifdef USE_SRAM_FLASH_BANK_EMU
     const hal_flash_bank_t * hal_flash_bank_impl = hal_flash_bank_memory_init_instance(
             &hal_flash_bank_context,
@@ -558,17 +558,19 @@ static void setup_dbs(void){
             hal_flash_bank_impl,
             &hal_flash_bank_context);
 
-    // setup global tlv
+    // setup global TLV
+    btstack_tlv_set_instance(btstack_tlv_impl, &btstack_tlv_flash_bank_context);
+
+    // configure LE Device DB for TLV
     le_device_db_tlv_configure(btstack_tlv_impl, &btstack_tlv_flash_bank_context);
 }
 
 static void packet_handler (uint8_t packet_type, uint16_t channel, uint8_t *packet, uint16_t size){
     if (packet_type != HCI_EVENT_PACKET) return;
     switch(hci_event_packet_get_type(packet)){
-        case BTSTACK_EVENT_STATE:
-            if (btstack_event_state_get_state(packet) != HCI_STATE_WORKING) return;
+        // wait with TLV init (which uses HW semaphores to coordinate with CPU2) until CPU2 was started
+        case HCI_EVENT_TRANSPORT_READY:
             setup_dbs();
-            log_info("BTstack: up and running.");
             break;
         default:
             break;
