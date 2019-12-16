@@ -340,7 +340,7 @@ static void transport_deliver_hci_packets(void){
     // process hci packets
     while (xQueueReceive(hciEvtQueue, &hcievt, 0) == pdTRUE)
     {
-        log_info("Packet address: %x", hcievt);
+        log_debug("Packet address: %x", hcievt);
         switch (hcievt->evtserial.type)
         {
             case HCI_EVENT_PACKET:
