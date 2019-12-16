@@ -66,7 +66,7 @@ Please use any ARM Cortex SWD programmer via the SWD interface desribed in the h
 
 When using an external J-Link programmer or after installing J-Link OB on the Nucleo68 board, you can flash and debug using the cross-platform [SEGGER Ozone Debugger](https://www.segger.com/products/development-tools/ozone-j-link-debugger/). It is included in some J-Link programmers or can be used for free for evaluation usage.
 
-Just start Ozone and open the .jdebug file in the build folder. When compiled with "ENABLE_SEGGER_RTT", the debug output shows up in the Terminal window of Ozone. 
+Just start Ozone and open the .jdebug file in the build folder. When compiled with "ENABLE_SEGGER_RTT", the debug output shows up in the Terminal window of Ozone. Note: as mentioned before, Segger RTT currently stops working when CPU2 has started up.
 
 ## Debug output
 
