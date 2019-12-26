@@ -223,6 +223,8 @@ EXAMPLES_LE_ONLY=           \
 	sm_pairing_peripheral   \
 	spp_and_gatt_counter    \
 	ublox_spp_le_counter    \
+	clock_server            \
+	clock_client
 
 # List of Examples that use Bluetooth BR/EDR/LE = Dual Mode
 
@@ -427,6 +429,12 @@ ublox_spp_le_counter: ublox_spp_le_counter.h ${CORE_OBJ} ${COMMON_OBJ} ${ATT_OBJ
 
 mesh_node_demo: mesh_node_demo.h ${CORE_OBJ} ${COMMON_OBJ} ${MESH_OBJ} ${ATT_OBJ} ${GATT_SERVER_OBJ} ${SM_OBJ} mesh_node_demo.o
 	${CC} $(filter-out mesh_node_demo.h,$^) ${CFLAGS} ${LDFLAGS} -o $@
+
+clock_client: ${CORE_OBJ} ${COMMON_OBJ} ${ATT_OBJ} ${GATT_CLIENT_OBJ} clock_client.c
+	${CC} $^ ${CFLAGS} ${LDFLAGS} -o $@
+
+clock_server: clock_server.h ${CORE_OBJ} ${COMMON_OBJ} ${ATT_OBJ} ${GATT_SERVER_OBJ} ${CLASSIC_OBJ} clock_server.c
+	${CC} $(filter-out clock_server.h,$^) ${CFLAGS} ${LDFLAGS} -o $@
 
 clean:
 	rm -f ${EXAMPLES} ${EXAMPLES_GATT_H_FILES}
