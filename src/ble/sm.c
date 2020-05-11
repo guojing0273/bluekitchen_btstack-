@@ -1245,6 +1245,18 @@ static void sm_address_resolution_handle_event(address_resolution_event_t event)
 
 static void sm_key_distribution_handle_all_received(sm_connection_t * sm_conn){
 
+    // log security data
+    log_info("Key distribution, keys received:");
+    log_info_key("IRK", setup->sm_peer_irk);
+#ifdef ENABLE_LE_SIGNED_WRITE
+    log_info_key("CSRK", setup->sm_peer_csrk);
+#endif
+    if (setup->sm_use_secure_connections){
+        log_info_key("LTK", setup->sm_ltk);
+    } else {
+        log_info_key("LTK", setup->sm_peer_ltk);
+    }
+
     int le_db_index = -1;
 
     // only store pairing information if both sides are bondable, i.e., the bonadble flag is set
